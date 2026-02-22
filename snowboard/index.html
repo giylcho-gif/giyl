@@ -6,8 +6,16 @@
 <title>Alpine Rush - Downhill Snowboard</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none; }
 canvas { display: block; }
+#snowPad{display:none;position:fixed;bottom:8px;left:0;right:0;height:120px;z-index:1000;touch-action:none;pointer-events:none}
+#snowPad .sp-btn{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;border:2px solid rgba(100,200,255,0.4);background:rgba(6,182,212,0.25);backdrop-filter:blur(4px);touch-action:none;user-select:none;font-size:14px}
+#snowPad .sp-btn:active{background:rgba(6,182,212,0.5)}
+#sp-left{width:58px;height:58px;left:15px;bottom:30px}
+#sp-right{width:58px;height:58px;left:88px;bottom:30px}
+#sp-up{width:55px;height:55px;right:85px;bottom:55px;font-size:12px}
+#sp-down{width:55px;height:55px;right:85px;bottom:-5px;font-size:12px}
+#sp-jump{width:68px;height:68px;right:12px;bottom:25px;background:rgba(100,150,255,0.5);border-color:rgba(150,200,255,0.5);font-size:12px}
 #ui-overlay {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 10;
@@ -1420,6 +1428,30 @@ function menuSnow() {
   requestAnimationFrame(menuSnow);
 }
 menuSnow();
+
+// ===== 모바일 스노보드 터치 컨트롤 =====
+if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+  document.getElementById('snowPad').style.display='block';
+  const bmap={'sp-left':'left','sp-right':'right','sp-up':'up','sp-down':'down','sp-jump':'jump'};
+  const tmap={left:'touchLeft',right:'touchRight',up:'touchUp',down:'touchDown',jump:'touchJump'};
+  Object.entries(bmap).forEach(([id,action])=>{
+    const el=document.getElementById(id);
+    const tv=tmap[action];
+    el.addEventListener('pointerdown',e=>{e.preventDefault();window[tv]=true;},{passive:false});
+    el.addEventListener('pointerup',e=>{e.preventDefault();window[tv]=false;},{passive:false});
+    el.addEventListener('pointercancel',()=>{window[tv]=false;});
+    el.addEventListener('pointerleave',()=>{window[tv]=false;});
+  });
+  document.addEventListener('touchmove',e=>{if(e.target.closest('#snowPad'))e.preventDefault();},{passive:false});
+}
 </script>
+
+<div id="snowPad">
+  <div class="sp-btn" id="sp-left">◀</div>
+  <div class="sp-btn" id="sp-right">▶</div>
+  <div class="sp-btn" id="sp-up">가속</div>
+  <div class="sp-btn" id="sp-down">감속</div>
+  <div class="sp-btn" id="sp-jump">점프</div>
+</div>
 </body>
 </html>

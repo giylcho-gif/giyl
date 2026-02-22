@@ -6,7 +6,7 @@
 <title>Zombie TD - Survival Defense</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;font-family:'Segoe UI',sans-serif;overflow:hidden;height:100vh;display:flex;justify-content:center;align-items:center;user-select:none}
+body{background:#0a0a0a;font-family:'Segoe UI',sans-serif;overflow:hidden;height:100vh;display:flex;justify-content:center;align-items:center;user-select:none;touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none}
 #root{position:relative;width:100vw;height:100vh}
 canvas{display:block;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 
@@ -1116,6 +1116,35 @@ function App() {
     G.hoverTile = { gx: Math.floor(mx/TILE), gy: Math.floor(my/TILE) };
   }, []);
 
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const rect = cv.getBoundingClientRect();
+    const scaleX = W / rect.width, scaleY = H / rect.height;
+    const mx = (touch.clientX - rect.left) * scaleX;
+    const my = (touch.clientY - rect.top) * scaleY;
+    G.hoverTile = { gx: Math.floor(mx/TILE), gy: Math.floor(my/TILE) };
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const rect = cv.getBoundingClientRect();
+    const scaleX = W / rect.width, scaleY = H / rect.height;
+    const mx = (touch.clientX - rect.left) * scaleX;
+    const my = (touch.clientY - rect.top) * scaleY;
+    const gx = Math.floor(mx/TILE), gy = Math.floor(my/TILE);
+    G.hoverTile = { gx, gy };
+    // Dispatch synthetic click so handleCanvasClick fires
+    cv.dispatchEvent(new MouseEvent('click', { clientX: touch.clientX, clientY: touch.clientY, bubbles: true }));
+  }, []);
+
   const handleCanvasClick = useCallback((e) => {
     const cv = canvasRef.current;
     if (!cv) return;
@@ -1294,10 +1323,12 @@ function App() {
     // Canvas
     React.createElement('canvas', {
       ref: canvasRef,
-      style:{maxWidth:'100%',maxHeight:'100%'},
+      style:{maxWidth:'100%',maxHeight:'100%',touchAction:'none'},
       onMouseMove: handleCanvasMove,
       onClick: handleCanvasClick,
       onMouseLeave: () => { G.hoverTile = null; },
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
     }),
 
     // HUD

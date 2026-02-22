@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>라이벌 FPS</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -10,6 +11,7 @@ body {
     display:flex; justify-content:center; align-items:center;
     height:100vh; overflow:hidden;
     font-family:'Segoe UI',sans-serif;
+    touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
 }
 canvas {
     border-radius:8px;
@@ -17,6 +19,16 @@ canvas {
     max-width:100vw;
     max-height:100vh;
 }
+@media(max-width:768px){canvas{max-height:60vh!important}}
+#fpsControls{display:none;position:fixed;bottom:0;left:0;right:0;height:180px;z-index:1000;touch-action:none;pointer-events:none}
+.fps-joy{position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none}
+.fps-joy-knob{position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.3);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+#fps-joy-left{left:20px;bottom:20px}
+#fps-joy-right{right:20px;bottom:20px}
+#fps-shoot{position:absolute;right:160px;bottom:55px;width:60px;height:60px;border-radius:50%;background:rgba(255,50,50,0.6);border:2px solid rgba(255,100,100,0.5);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:13px}
+#fps-shoot:active{background:rgba(255,50,50,0.9)}
+#fps-jump{position:absolute;right:160px;bottom:130px;width:50px;height:50px;border-radius:50%;background:rgba(100,150,255,0.5);border:2px solid rgba(100,150,255,0.4);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px}
+#fps-jump:active{background:rgba(100,150,255,0.8)}
 #crosshair {
     position:fixed; pointer-events:none; z-index:999;
     width:30px; height:30px;
@@ -33,11 +45,262 @@ const W = 960, H = 640;
 canvas.width = W; canvas.height = H;
 
 // ====== GAME STATE ======
-let gameState = 'title'; // title, classSelect, playing, dead, scoreboard
+let gameState = 'title'; // title, classSelect, playing, dead, scoreboard, lobby, waiting
 let mouseX = W/2, mouseY = H/2;
 let mouseLocked = false;
 let yaw = 0, pitch = 0;
 const SENSITIVITY = 0.0008;
+let frameCount = 0;
+
+// ====== NETWORK ======
+let ws = null;
+let isOnline = false;
+let isHost = false;
+let roomCode = '';
+let myPlayerId = '';
+let remotePlayer = null;
+let networkState = 'disconnected'; // disconnected, connecting, lobby, waiting, playing
+let roomCodeInput = '';
+let lobbyMode = ''; // 'create' or 'join'
+let myClassSelected = false;
+let netMessage = '';
+let netMessageTimer = 0;
+const SERVER_URL = 'wss://rivals-server-2.onrender.com';
+
+function connectToServer(callback) {
+    if(ws && ws.readyState <= 1) { if(callback) callback(); return; }
+    netMessage = '서버 연결 중...';
+    netMessageTimer = 999;
+    ws = new WebSocket(SERVER_URL);
+    networkState = 'connecting';
+
+    ws.onopen = () => {
+        networkState = 'lobby';
+        netMessage = '서버 연결 완료!';
+        netMessageTimer = 120;
+        if(callback) callback();
+    };
+    ws.onclose = () => {
+        networkState = 'disconnected';
+        if(isOnline && gameState === 'playing') {
+            netMessage = '연결이 끊겼습니다';
+            netMessageTimer = 300;
+            isOnline = false;
+            // Fill remote player slot with bot
+            if(remotePlayer) { remotePlayer = null; while(enemies.length < 8) spawnEnemy(); }
+        }
+    };
+    ws.onerror = () => {
+        netMessage = '서버 연결 실패!';
+        netMessageTimer = 300;
+        networkState = 'disconnected';
+    };
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        handleNetworkMessage(msg);
+    };
+}
+
+function sendMsg(obj) {
+    if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+function initRemotePlayer(cls) {
+    remotePlayer = {
+        x:0, z:0, y:0, yaw:0, pitch:0,
+        hp:100, maxHp:100, armor:0,
+        kills:0, deaths:0,
+        selectedClass: cls || 0,
+        weapon:0, name:'상대방',
+        color:'#ffaa00', muzzleFlash:0,
+        spawnProtection:0,
+        prevX:0, prevZ:0, prevY:0,
+        targetX:0, targetZ:0, targetY:0,
+        interpT:1, alive:true
+    };
+}
+
+function handleNetworkMessage(msg) {
+    switch(msg.type) {
+        case 'room_created':
+            roomCode = msg.code;
+            myPlayerId = msg.playerId;
+            mapSeed = msg.mapSeed;
+            isHost = true;
+            gameState = 'waiting';
+            netMessage = '';
+            break;
+        case 'room_joined':
+            roomCode = msg.code;
+            myPlayerId = msg.playerId;
+            mapSeed = msg.mapSeed;
+            isHost = false;
+            gameState = 'classSelect';
+            netMessage = '방에 참가했습니다! 클래스를 선택하세요.';
+            netMessageTimer = 180;
+            break;
+        case 'player_joined':
+            netMessage = '상대방이 입장했습니다!';
+            netMessageTimer = 120;
+            // Both players present, go to class select
+            gameState = 'classSelect';
+            break;
+        case 'opponent_class':
+            if(!remotePlayer) initRemotePlayer(msg.selectedClass);
+            remotePlayer.selectedClass = msg.selectedClass;
+            remotePlayer.weapon = classes[msg.selectedClass].weapon;
+            remotePlayer.maxHp = classes[msg.selectedClass].hp;
+            remotePlayer.color = classes[msg.selectedClass].color;
+            break;
+        case 'start_game': {
+            isOnline = true;
+            if(!remotePlayer) initRemotePlayer(0);
+            generateMap();
+            enemies.length = 0;
+            // 온라인 모드에서는 AI 봇 없음 (1v1)
+            gameState = 'playing';
+            try { canvas.requestPointerLock(); } catch(e) {}
+            break;
+        }
+        case 'player_state':
+            if(!remotePlayer) initRemotePlayer(msg.selectedClass || 0);
+            remotePlayer.prevX = remotePlayer.x;
+            remotePlayer.prevZ = remotePlayer.z;
+            remotePlayer.prevY = remotePlayer.y;
+            remotePlayer.targetX = msg.x;
+            remotePlayer.targetZ = msg.z;
+            remotePlayer.targetY = msg.y;
+            remotePlayer.interpT = 0;
+            remotePlayer.yaw = msg.yaw;
+            remotePlayer.hp = msg.hp;
+            remotePlayer.armor = msg.armor;
+            remotePlayer.weapon = msg.weapon;
+            remotePlayer.selectedClass = msg.selectedClass;
+            remotePlayer.kills = msg.kills;
+            remotePlayer.deaths = msg.deaths;
+            remotePlayer.muzzleFlash = msg.muzzleFlash;
+            remotePlayer.spawnProtection = msg.spawnProtection;
+            remotePlayer.color = classes[msg.selectedClass] ? classes[msg.selectedClass].color : '#ffaa00';
+            remotePlayer.maxHp = classes[msg.selectedClass] ? classes[msg.selectedClass].hp : 100;
+            remotePlayer.alive = msg.hp > 0;
+            break;
+        case 'shoot':
+            // Show remote player's muzzle flash and tracer
+            if(remotePlayer) {
+                remotePlayer.muzzleFlash = 4;
+                if(msg.tx !== undefined) {
+                    bullets.push({ x:msg.x, y:msg.y, z:msg.z, tx:msg.tx, ty:msg.ty, tz:msg.tz, life:3, tracer:true, color:weapons[msg.weapon]?.color || '#ff0' });
+                }
+            }
+            break;
+        case 'hit':
+            // Remote player hit us
+            if(player.spawnProtection <= 0 && player.hp > 0) {
+                let dmg = msg.damage;
+                if(player.armor > 0) {
+                    const armorDmg = Math.min(player.armor, dmg*0.6);
+                    player.armor -= armorDmg;
+                    dmg *= 0.4;
+                }
+                player.hp -= dmg;
+                player.damageFlash = 15;
+                addDamageNumber(player.x, player.y+16, player.z, Math.round(dmg), msg.headshot);
+                if(player.hp <= 0) {
+                    player.deaths++;
+                    gameState = 'dead';
+                    player.respawnTimer = 180;
+                    sendMsg({ type: 'kill', victimName: '나', weapon: msg.weaponName || '무기' });
+                }
+            }
+            break;
+        case 'kill':
+            // 상대방이 죽었음 = 내가 킬함 → 내 킬 카운트 증가
+            player.kills++;
+            const killNow = Date.now();
+            if(killNow - player.lastKillTime < 3000) player.killStreak++;
+            else player.killStreak = 1;
+            player.lastKillTime = killNow;
+            if(msg.victimName) {
+                addKillFeed('나', msg.victimName, msg.weapon);
+            }
+            break;
+        case 'bot_states':
+            if(!isHost && msg.bots) {
+                // Sync bot data from host
+                while(enemies.length < msg.bots.length) {
+                    enemies.push({ x:0,z:0,y:0,vx:0,vz:0,vy:0,hp:100,maxHp:100,armor:0,
+                        class:0,weapon:0,name:'Bot',color:'#f44',shootCooldown:0,muzzleFlash:0,
+                        accuracy:0.3,reactionTime:60,state:'patrol',stateTimer:0,target:null,
+                        targetX:0,targetZ:0,strafeDir:1,strafeTimer:0,kills:0,deaths:0,
+                        spawnProtection:0,yaw:0,speed:2,onGround:true });
+                }
+                while(enemies.length > msg.bots.length) enemies.pop();
+                msg.bots.forEach((b, i) => {
+                    if(!enemies[i]) return;
+                    enemies[i].x = b.x; enemies[i].z = b.z; enemies[i].y = b.y;
+                    enemies[i].yaw = b.yaw; enemies[i].hp = b.hp; enemies[i].armor = b.armor;
+                    enemies[i].class = b.cls; enemies[i].weapon = b.weapon;
+                    enemies[i].name = b.name; enemies[i].color = b.color;
+                    enemies[i].muzzleFlash = b.muzzleFlash;
+                    enemies[i].kills = b.kills; enemies[i].deaths = b.deaths;
+                    enemies[i].spawnProtection = b.spawnProtection;
+                    enemies[i].maxHp = classes[b.cls] ? classes[b.cls].hp : 100;
+                });
+            }
+            break;
+        case 'bot_hit':
+            // Guest hit a bot, host applies damage
+            if(isHost && msg.botIdx !== undefined && enemies[msg.botIdx]) {
+                const e = enemies[msg.botIdx];
+                if(e.hp <= 0 || e.spawnProtection > 0) break;
+                let dmg = msg.damage;
+                if(e.armor > 0) {
+                    const armorDmg = Math.min(e.armor, dmg*0.6);
+                    e.armor -= armorDmg;
+                    dmg *= 0.4;
+                }
+                e.hp -= dmg;
+                addDamageNumber(e.x, e.y+16, e.z, Math.round(dmg), msg.headshot);
+                for(let i=0;i<5;i++) addParticle(e.x, e.y+8, e.z, (Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3, e.color, 15);
+                if(e.hp <= 0) {
+                    // Attribute kill to remote player
+                    if(remotePlayer) remotePlayer.kills++;
+                    e.deaths++;
+                    addKillFeed(remotePlayer ? remotePlayer.name : '상대방', e.name, msg.weaponName || '무기');
+                    for(let i=0;i<20;i++) addParticle(e.x, e.y+8, e.z, (Math.random()-0.5)*5, Math.random()*5, (Math.random()-0.5)*5, e.color, 30, 3);
+                    setTimeout(() => {
+                        const sp = spawnPoints[Math.floor(seededRandom()*spawnPoints.length)];
+                        e.x = sp.x+(Math.random()-0.5)*30; e.z = sp.z+(Math.random()-0.5)*30;
+                        e.hp = e.maxHp; e.armor = classes[e.class].armor;
+                        e.state = 'patrol'; e.spawnProtection = 120;
+                    }, 3000);
+                }
+            }
+            break;
+        case 'player_left':
+            netMessage = '상대방이 나갔습니다';
+            netMessageTimer = 300;
+            remotePlayer = null;
+            // 로비로 돌아가기
+            gameState = 'lobby';
+            isOnline = false;
+            lobbyMode = '';
+            break;
+        case 'error':
+            if(msg.message === 'room_not_found') netMessage = '방을 찾을 수 없습니다';
+            else if(msg.message === 'room_full') netMessage = '방이 꽉 찼습니다';
+            else netMessage = '오류: ' + msg.message;
+            netMessageTimer = 180;
+            break;
+    }
+}
+
+// Seeded random for deterministic map
+let mapSeed = 12345;
+function seededRandom() {
+    mapSeed = (mapSeed * 16807) % 2147483647;
+    return (mapSeed - 1) / 2147483646;
+}
 
 // ====== PLAYER ======
 const player = {
@@ -47,14 +310,19 @@ const player = {
     armor: 0,
     kills: 0, deaths: 0,
     weapon: 0,
-    ammo: [30, 8, 5, 1],
-    maxAmmo: [30, 8, 5, 1],
+    weaponSlots: [0, 4, 5, 6], // 주무기, 권총, 낫, 수류탄
+    currentSlot: 0,
+    ammo: [30, 8, 5, 1, 12, 1, 3],
+    maxAmmo: [30, 8, 5, 1, 12, 1, 3],
     reloadTime: 0,
     shootCooldown: 0,
+    meleeActive: false,
+    meleeTime: 0,
+    meleeCooldown: 0,
     respawnTimer: 0,
     spawnProtection: 0,
     speed: 2.2,
-    jumpForce: 6,
+    jumpForce: 3.5,
     onGround: false,
     damageFlash: 0,
     killStreak: 0,
@@ -63,6 +331,10 @@ const player = {
     dashing: false,
     dashTime: 0,
     dashDir: {x:0, z:0},
+    scytheDashing: false,
+    scytheDashTime: 0,
+    scytheDashCooldown: 0,
+    scytheDashDir: {x:0, z:0},
     selectedClass: 0,
     scope: false,
     muzzleFlash: 0
@@ -73,7 +345,10 @@ const weapons = [
     { name:'돌격소총', damage:18, fireRate:6, reloadSpeed:90, spread:0.015, auto:true, range:300, color:'#ff6b35', ammoName:'5.56mm', icon:'▄█▀', sound:'rifle' },
     { name:'샷건', damage:12, fireRate:30, reloadSpeed:60, spread:0.08, auto:false, range:100, color:'#ffaa00', pellets:8, ammoName:'12게이지', icon:'▄██', sound:'shotgun' },
     { name:'스나이퍼', damage:95, fireRate:50, reloadSpeed:120, spread:0.001, auto:false, range:500, color:'#00ccff', ammoName:'.50 BMG', icon:'━━▄', sound:'sniper', scope:true },
-    { name:'로켓런처', damage:80, fireRate:60, reloadSpeed:150, spread:0.005, auto:false, range:400, color:'#ff3333', ammoName:'로켓', icon:'◄━━', sound:'rocket', explosive:true }
+    { name:'로켓런처', damage:80, fireRate:60, reloadSpeed:150, spread:0.005, auto:false, range:400, color:'#ff3333', ammoName:'로켓', icon:'◄━━', sound:'rocket', explosive:true },
+    { name:'권총', damage:22, fireRate:10, reloadSpeed:50, spread:0.02, auto:false, range:200, color:'#cccccc', ammoName:'9mm', icon:'▄▀', sound:'pistol' },
+    { name:'낫', damage:65, fireRate:20, reloadSpeed:0, spread:0, auto:false, range:30, color:'#cc44ff', ammoName:'', icon:'⌒', sound:'melee', melee:true },
+    { name:'수류탄', damage:90, fireRate:40, reloadSpeed:0, spread:0.01, auto:false, range:300, color:'#44cc44', ammoName:'수류탄', icon:'●', sound:'grenade', explosive:true, grenade:true }
 ];
 
 // ====== CLASSES ======
@@ -97,49 +372,152 @@ function generateMap() {
     walls.length = 0;
     buildings.length = 0;
 
-    // Border walls
-    walls.push({x:-MAP_SIZE, z:-MAP_SIZE, w:MAP_SIZE*2, d:5, h:30, color:'#333'});
-    walls.push({x:-MAP_SIZE, z:MAP_SIZE-5, w:MAP_SIZE*2, d:5, h:30, color:'#333'});
-    walls.push({x:-MAP_SIZE, z:-MAP_SIZE, w:5, d:MAP_SIZE*2, h:30, color:'#333'});
-    walls.push({x:MAP_SIZE-5, z:-MAP_SIZE, w:5, d:MAP_SIZE*2, h:30, color:'#333'});
+    // Border walls (높은 외곽)
+    walls.push({x:-MAP_SIZE, z:-MAP_SIZE, w:MAP_SIZE*2, d:5, h:35, color:'#2a2a3a'});
+    walls.push({x:-MAP_SIZE, z:MAP_SIZE-5, w:MAP_SIZE*2, d:5, h:35, color:'#2a2a3a'});
+    walls.push({x:-MAP_SIZE, z:-MAP_SIZE, w:5, d:MAP_SIZE*2, h:35, color:'#2a2a3a'});
+    walls.push({x:MAP_SIZE-5, z:-MAP_SIZE, w:5, d:MAP_SIZE*2, h:35, color:'#2a2a3a'});
 
-    // Central building
-    buildings.push({x:-30, z:-30, w:60, d:60, h:25, color:'#4a4a6a', name:'중앙 건물'});
-    walls.push({x:-30, z:-30, w:60, d:5, h:25, color:'#4a4a6a'});
-    walls.push({x:-30, z:25, w:60, d:5, h:25, color:'#4a4a6a'});
-    walls.push({x:-30, z:-30, w:5, d:60, h:25, color:'#4a4a6a'});
-    walls.push({x:25, z:-30, w:5, d:60, h:25, color:'#4a4a6a'});
+    // ===== 중앙 타워 (높은 구조물, 낫 대시로만 올라감) =====
+    buildings.push({x:-20, z:-20, w:40, d:40, h:28, color:'#3a3a5a', name:'중앙 타워'});
+    walls.push({x:-20, z:-20, w:40, d:4, h:28, color:'#3a3a5a'});
+    walls.push({x:-20, z:16, w:40, d:4, h:28, color:'#3a3a5a'});
+    walls.push({x:-20, z:-20, w:4, d:40, h:28, color:'#3a3a5a'});
+    walls.push({x:16, z:-20, w:4, d:40, h:28, color:'#3a3a5a'});
+    // 타워 위 장식 기둥
+    walls.push({x:-15, z:-15, w:6, d:6, h:35, color:'#5050aa'});
+    walls.push({x:9, z:-15, w:6, d:6, h:35, color:'#5050aa'});
+    walls.push({x:-15, z:9, w:6, d:6, h:35, color:'#5050aa'});
+    walls.push({x:9, z:9, w:6, d:6, h:35, color:'#5050aa'});
 
-    // Corner buildings
-    const corners = [{x:-120,z:-120},{x:80,z:-120},{x:-120,z:80},{x:80,z:80}];
-    corners.forEach(c => {
-        buildings.push({x:c.x, z:c.z, w:40, d:40, h:20, color:'#5a4a3a'});
-        walls.push({x:c.x, z:c.z, w:40, d:3, h:20, color:'#5a4a3a'});
-        walls.push({x:c.x, z:c.z+37, w:40, d:3, h:20, color:'#5a4a3a'});
-        walls.push({x:c.x, z:c.z, w:3, d:40, h:20, color:'#5a4a3a'});
-        walls.push({x:c.x+37, z:c.z, w:3, d:40, h:20, color:'#5a4a3a'});
-    });
-
-    // Scattered cover walls
-    const covers = [
-        {x:-60,z:0,w:20,d:3,h:12}, {x:40,z:0,w:20,d:3,h:12},
-        {x:0,z:-60,w:3,d:20,h:12}, {x:0,z:40,w:3,d:20,h:12},
-        {x:-80,z:-60,w:15,d:3,h:10}, {x:65,z:60,w:15,d:3,h:10},
-        {x:-60,z:80,w:3,d:15,h:10}, {x:60,z:-80,w:3,d:15,h:10},
-        {x:-150,z:50,w:25,d:3,h:15}, {x:125,z:-50,w:25,d:3,h:15},
-        {x:50,z:150,w:3,d:25,h:15}, {x:-50,z:-150,w:3,d:25,h:15}
+    // ===== 4코너 건물 (중간 높이) =====
+    const cornerData = [
+        {x:-160, z:-160, color:'#5a3a3a'},  // 빨강 톤
+        {x:120, z:-160, color:'#3a5a3a'},   // 초록 톤
+        {x:-160, z:120, color:'#3a3a5a'},   // 파랑 톤
+        {x:120, z:120, color:'#5a5a3a'}     // 노랑 톤
     ];
-    covers.forEach(c => {
-        walls.push({...c, color:'#666'});
+    cornerData.forEach(c => {
+        buildings.push({x:c.x, z:c.z, w:45, d:45, h:22, color:c.color});
+        walls.push({x:c.x, z:c.z, w:45, d:4, h:22, color:c.color});
+        walls.push({x:c.x, z:c.z+41, w:45, d:4, h:22, color:c.color});
+        walls.push({x:c.x, z:c.z, w:4, d:45, h:22, color:c.color});
+        walls.push({x:c.x+41, z:c.z, w:4, d:45, h:22, color:c.color});
     });
 
-    // Crate clusters
-    for(let i = 0; i < 15; i++) {
-        const x = (Math.random()-0.5) * MAP_SIZE * 1.5;
-        const z = (Math.random()-0.5) * MAP_SIZE * 1.5;
-        const s = 4 + Math.random()*4;
-        walls.push({x:x, z:z, w:s, d:s, h:s, color:'#8B7355'});
+    // ===== 중간 거리 직사각 건물 4개 =====
+    const midBuildings = [
+        {x:-90, z:-25, w:30, d:50, h:20, color:'#4a4050'},
+        {x:60, z:-25, w:30, d:50, h:20, color:'#504a40'},
+        {x:-25, z:-90, w:50, d:30, h:20, color:'#404a50'},
+        {x:-25, z:60, w:50, d:30, h:20, color:'#504040'}
+    ];
+    midBuildings.forEach(b => {
+        buildings.push({...b});
+        walls.push({x:b.x, z:b.z, w:b.w, d:4, h:b.h, color:b.color});
+        walls.push({x:b.x, z:b.z+b.d-4, w:b.w, d:4, h:b.h, color:b.color});
+        walls.push({x:b.x, z:b.z, w:4, d:b.d, h:b.h, color:b.color});
+        walls.push({x:b.x+b.w-4, z:b.z, w:4, d:b.d, h:b.h, color:b.color});
+    });
+
+    // ===== 길고 낮은 엄폐벽 (다양한 높이) =====
+    const coverWalls = [
+        // 내부 십자형 엄폐
+        {x:-55, z:-3, w:25, d:6, h:10, color:'#666'},
+        {x:30, z:-3, w:25, d:6, h:10, color:'#666'},
+        {x:-3, z:-55, w:6, d:25, h:10, color:'#666'},
+        {x:-3, z:30, w:6, d:25, h:10, color:'#666'},
+        // 중간 거리 엄폐
+        {x:-110, z:50, w:30, d:4, h:12, color:'#555'},
+        {x:80, z:-50, w:30, d:4, h:12, color:'#555'},
+        {x:50, z:110, w:4, d:30, h:12, color:'#555'},
+        {x:-50, z:-110, w:4, d:30, h:12, color:'#555'},
+        // 외곽 긴 벽
+        {x:-180, z:-60, w:35, d:4, h:14, color:'#4a4a4a'},
+        {x:145, z:60, w:35, d:4, h:14, color:'#4a4a4a'},
+        {x:-60, z:170, w:4, d:35, h:14, color:'#4a4a4a'},
+        {x:60, z:-180, w:4, d:35, h:14, color:'#4a4a4a'},
+        // 대각선 방향 벽
+        {x:-130, z:-30, w:20, d:4, h:11, color:'#5a5a5a'},
+        {x:110, z:30, w:20, d:4, h:11, color:'#5a5a5a'},
+        {x:-30, z:130, w:4, d:20, h:11, color:'#5a5a5a'},
+        {x:30, z:-130, w:4, d:20, h:11, color:'#5a5a5a'}
+    ];
+    coverWalls.forEach(c => walls.push(c));
+
+    // ===== 높은 감시탑 (4개, 모서리 사이) =====
+    const towers = [
+        {x:-100, z:100, color:'#6a4a6a'},
+        {x:100, z:-100, color:'#6a6a4a'},
+        {x:100, z:100, color:'#4a6a6a'},
+        {x:-100, z:-100, color:'#6a5a4a'}
+    ];
+    towers.forEach(t => {
+        // 베이스
+        walls.push({x:t.x-8, z:t.z-8, w:16, d:16, h:26, color:t.color});
+        // 꼭대기 돌출
+        walls.push({x:t.x-12, z:t.z-12, w:24, d:4, h:26, color:t.color});
+        walls.push({x:t.x-12, z:t.z+8, w:24, d:4, h:26, color:t.color});
+        walls.push({x:t.x-12, z:t.z-12, w:4, d:24, h:26, color:t.color});
+        walls.push({x:t.x+8, z:t.z-12, w:4, d:24, h:26, color:t.color});
+    });
+
+    // ===== 플랫폼 (낮은 높이 - 점프로 올라갈 수 있는 것들) =====
+    const platforms = [
+        {x:-70, z:70, w:20, d:20, h:8, color:'#7a6a5a'},
+        {x:50, z:-70, w:20, d:20, h:8, color:'#7a6a5a'},
+        {x:-70, z:-70, w:15, d:15, h:6, color:'#6a7a5a'},
+        {x:70, z:70, w:15, d:15, h:6, color:'#5a6a7a'},
+        // 계단식 플랫폼 (중앙 방향)
+        {x:-45, z:-45, w:12, d:12, h:10, color:'#5a5a6a'},
+        {x:33, z:33, w:12, d:12, h:10, color:'#5a5a6a'},
+        {x:33, z:-45, w:12, d:12, h:10, color:'#6a5a5a'},
+        {x:-45, z:33, w:12, d:12, h:10, color:'#5a6a5a'}
+    ];
+    platforms.forEach(p => walls.push(p));
+
+    // ===== 장식 기둥 (좁고 높음) =====
+    const pillars = [
+        {x:-50, z:0, h:18}, {x:50, z:0, h:18},
+        {x:0, z:-50, h:18}, {x:0, z:50, h:18},
+        {x:-140, z:0, h:20}, {x:140, z:0, h:20},
+        {x:0, z:-140, h:20}, {x:0, z:140, h:20}
+    ];
+    pillars.forEach(p => {
+        walls.push({x:p.x-3, z:p.z-3, w:6, d:6, h:p.h, color:'#8080aa'});
+    });
+
+    // ===== 크레이트 & 컨테이너 (seeded random) =====
+    for(let i = 0; i < 25; i++) {
+        const x = (seededRandom()-0.5) * MAP_SIZE * 1.6;
+        const z = (seededRandom()-0.5) * MAP_SIZE * 1.6;
+        const s = 4 + seededRandom()*5;
+        const h = 4 + seededRandom()*6;
+        const colors = ['#8B7355','#6B5B45','#7B6B55','#5B4B35','#9B8B65'];
+        walls.push({x:x, z:z, w:s, d:s, h:h, color:colors[Math.floor(seededRandom()*colors.length)]});
     }
+
+    // ===== L자형 구조물 =====
+    // 좌상 L자
+    walls.push({x:-180, z:-120, w:35, d:4, h:16, color:'#4a5a4a'});
+    walls.push({x:-180, z:-120, w:4, d:35, h:16, color:'#4a5a4a'});
+    // 우하 L자
+    walls.push({x:145, z:85, w:35, d:4, h:16, color:'#4a5a4a'});
+    walls.push({x:176, z:85, w:4, d:35, h:16, color:'#4a5a4a'});
+
+    // ===== 중앙 주변 작은 벽들 (다양한 전투 포인트) =====
+    const smallWalls = [
+        {x:-35, z:25, w:8, d:3, h:8, color:'#777'},
+        {x:27, z:-35, w:3, d:8, h:8, color:'#777'},
+        {x:25, z:27, w:8, d:3, h:8, color:'#777'},
+        {x:-35, z:-35, w:3, d:8, h:8, color:'#777'},
+        // 건물 사이 연결벽
+        {x:-60, z:-90, w:15, d:3, h:13, color:'#5a5a5a'},
+        {x:45, z:90, w:15, d:3, h:13, color:'#5a5a5a'},
+        {x:-90, z:60, w:3, d:15, h:13, color:'#5a5a5a'},
+        {x:90, z:-60, w:3, d:15, h:13, color:'#5a5a5a'}
+    ];
+    smallWalls.forEach(w => walls.push(w));
 }
 
 // ====== ENEMIES (BOTS) ======
@@ -215,7 +593,28 @@ function addDamageNumber(x, y, z, dmg, crit) {
 const keys = {};
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
-    if(gameState === 'title' && e.code === 'Space') gameState = 'classSelect';
+
+    // Lobby room code input
+    if(gameState === 'lobby' && lobbyMode === 'join') {
+        if(e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && roomCodeInput.length < 4) {
+            roomCodeInput += e.key.toUpperCase();
+        }
+        if(e.code === 'Backspace') roomCodeInput = roomCodeInput.slice(0, -1);
+        if(e.code === 'Enter' && roomCodeInput.length === 4) {
+            sendMsg({ type: 'join_room', code: roomCodeInput });
+        }
+        if(e.code === 'Escape') { lobbyMode = ''; roomCodeInput = ''; }
+        return;
+    }
+    if((gameState === 'lobby' || gameState === 'waiting') && e.code === 'Escape') {
+        gameState = 'title'; isOnline = false; lobbyMode = ''; myClassSelected = false;
+        if(ws) { ws.close(); ws = null; }
+        return;
+    }
+
+    if(gameState === 'title' && e.code === 'Space') {
+        isOnline = false; gameState = 'classSelect';
+    }
     if(gameState === 'classSelect') {
         if(e.code === 'Digit1') selectClass(0);
         if(e.code === 'Digit2') selectClass(1);
@@ -223,18 +622,29 @@ document.addEventListener('keydown', e => {
         if(e.code === 'Digit4') selectClass(3);
     }
     if(gameState === 'dead' && e.code === 'Space' && player.respawnTimer <= 0) respawn();
+    if(gameState === 'scoreboard' && e.code === 'Tab') { e.preventDefault(); gameState = 'playing'; return; }
     if(gameState === 'playing') {
-        if(e.code === 'KeyR' && player.ammo[player.weapon] < player.maxAmmo[player.weapon] && player.reloadTime <= 0) reload();
-        if(e.code === 'Tab') { e.preventDefault(); gameState = 'scoreboard'; }
-        if(e.code === 'Digit1') player.weapon = classes[player.selectedClass].weapon;
+        if(e.code === 'KeyR' && player.reloadTime <= 0 && !weapons[player.weapon].melee) reload();
+        if(e.code === 'Tab') { e.preventDefault(); gameState = 'scoreboard'; return; }
+        // 무기 전환 1~4
+        if(e.code === 'Digit1') { player.currentSlot = 0; player.weapon = player.weaponSlots[0]; player.scope = false; player.reloadTime = 0; }
+        if(e.code === 'Digit2') { player.currentSlot = 1; player.weapon = player.weaponSlots[1]; player.scope = false; player.reloadTime = 0; }
+        if(e.code === 'Digit3') { player.currentSlot = 2; player.weapon = player.weaponSlots[2]; player.scope = false; player.reloadTime = 0; }
+        if(e.code === 'Digit4') { player.currentSlot = 3; player.weapon = player.weaponSlots[3]; player.scope = false; player.reloadTime = 0; }
+        // F키 빠른 근접공격 (낫)
+        if(e.code === 'KeyF' && player.meleeCooldown <= 0 && !player.meleeActive) {
+            player.meleeActive = true;
+            player.meleeTime = 12;
+            player.meleeCooldown = 20;
+            meleeAttack();
+        }
         if(e.code === 'ShiftLeft' && player.dashCooldown <= 0 && player.selectedClass === 0) startDash();
         if(e.code === 'KeyQ') useAbility();
-        if(e.code === 'KeyR') reload();
     }
 });
 document.addEventListener('keyup', e => {
     keys[e.code] = false;
-    if(e.code === 'Tab' && gameState === 'scoreboard') gameState = 'playing';
+    if(e.code === 'Tab') e.preventDefault();
 });
 
 let shooting = false;
@@ -265,7 +675,23 @@ function handleMouseDown(e) {
             try { canvas.requestPointerLock(); } catch(e) {}
         }
     } else if(gameState === 'title') {
-        gameState = 'classSelect';
+        const btnW = 200, btnH = 50;
+        const soloX = W/2 - btnW - 20, soloY = H/2 + 30;
+        const onX = W/2 + 20, onY = H/2 + 30;
+        if(coords.x >= soloX && coords.x <= soloX+btnW && coords.y >= soloY && coords.y <= soloY+btnH) {
+            isOnline = false; gameState = 'classSelect';
+        } else if(coords.x >= onX && coords.x <= onX+btnW && coords.y >= onY && coords.y <= onY+btnH) {
+            gameState = 'lobby'; lobbyMode = '';
+            connectToServer();
+        }
+    } else if(gameState === 'lobby') {
+        const btnW = 260, btnH = 60;
+        const crX = W/2 - btnW/2, crY = 160, jrY = 260;
+        if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= crY && coords.y <= crY+btnH) {
+            connectToServer(() => { sendMsg({ type: 'create_room' }); });
+        } else if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= jrY && coords.y <= jrY+btnH) {
+            lobbyMode = 'join'; roomCodeInput = '';
+        }
     } else if(gameState === 'classSelect') {
         for(let i = 0; i < 4; i++) {
             const cx = 60 + i * 220, cy = 140, cw = 200, ch = 380;
@@ -318,7 +744,13 @@ canvas.addEventListener('touchend', () => { shooting = false; });
 
 canvas.addEventListener('contextmenu', e => {
     e.preventDefault();
-    if(weapons[player.weapon].scope) player.scope = !player.scope;
+    if(gameState !== 'playing') return;
+    // 낫 대시: 낫(무기5)을 들고 우클릭하면 위+앞으로 돌진
+    if(player.weapon === 5 && player.scytheDashCooldown <= 0) {
+        startScytheDash();
+    } else if(weapons[player.weapon].scope) {
+        player.scope = !player.scope;
+    }
 });
 
 // Fallback: document-level click for environments where canvas events don't fire
@@ -351,15 +783,29 @@ document.addEventListener('mousemove', e => {
 function selectClass(idx) {
     player.selectedClass = idx;
     const cls = classes[idx];
-    player.weapon = cls.weapon;
+    player.weaponSlots = [cls.weapon, 4, 5, 6]; // 주무기, 권총, 낫, 수류탄
+    player.currentSlot = 0;
+    player.weapon = player.weaponSlots[0];
     player.maxHp = cls.hp;
     player.hp = cls.hp;
     player.armor = cls.armor;
     player.speed = cls.speed;
-    player.ammo = [...player.maxAmmo];
-    respawn();
-    gameState = 'playing';
-    try { canvas.requestPointerLock(); } catch(e) {}
+    player.ammo = [30, 8, 5, 1, 12, 1, 3];
+    player.maxAmmo = [30, 8, 5, 1, 12, 1, 3];
+
+    if(isOnline || networkState === 'lobby' || networkState === 'waiting' || ws) {
+        // Online: send class selection and wait for start_game
+        myClassSelected = true;
+        sendMsg({ type: 'class_selected', selectedClass: idx });
+        netMessage = '상대방을 기다리는 중...';
+        netMessageTimer = 999;
+        gameState = 'waiting';
+    } else {
+        // Solo
+        respawn();
+        gameState = 'playing';
+        try { canvas.requestPointerLock(); } catch(e) {}
+    }
 }
 
 function findSafeSpawn() {
@@ -382,6 +828,49 @@ function findSafeSpawn() {
     return bestSpawn;
 }
 
+function meleeAttack() {
+    // 빠른 근접공격 - 낫 스윙
+    player.spawnProtection = 0;
+    const meleeRange = 35;
+    const meleeDamage = 65;
+    const dirX = -Math.sin(yaw);
+    const dirZ = Math.cos(yaw);
+
+    // AI 봇 히트 (솔로)
+    if(!isOnline) {
+        for(const e of enemies) {
+            if(e.hp <= 0 || e.spawnProtection > 0) continue;
+            const dx = e.x - player.x, dz = e.z - player.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            if(dist > meleeRange) continue;
+            // 전방 120도 범위
+            const dot = (dx*dirX + dz*dirZ) / (dist || 1);
+            if(dot < 0.3) continue;
+            e.hp -= meleeDamage;
+            addDamageNumber(e.x, e.y+16, e.z, meleeDamage, false);
+            for(let i=0;i<8;i++) addParticle(e.x, e.y+8, e.z, (Math.random()-0.5)*4, Math.random()*3, (Math.random()-0.5)*4, '#cc44ff', 15);
+            if(e.hp <= 0) onEnemyKilled(e, false);
+        }
+    }
+
+    // 원격 플레이어 히트 (온라인)
+    if(isOnline && remotePlayer && remotePlayer.alive && remotePlayer.spawnProtection <= 0) {
+        const rdx = remotePlayer.x - player.x, rdz = remotePlayer.z - player.z;
+        const rdist = Math.sqrt(rdx*rdx + rdz*rdz);
+        if(rdist <= meleeRange) {
+            const dot = (rdx*dirX + rdz*dirZ) / (rdist || 1);
+            if(dot > 0.3) {
+                sendMsg({ type: 'hit', damage: meleeDamage, headshot: false, weaponName: '낫' });
+                addDamageNumber(remotePlayer.x, remotePlayer.y+16, remotePlayer.z, meleeDamage, false);
+                for(let i=0;i<8;i++) addParticle(remotePlayer.x, remotePlayer.y+8, remotePlayer.z, (Math.random()-0.5)*4, Math.random()*3, (Math.random()-0.5)*4, '#cc44ff', 15);
+            }
+        }
+    }
+
+    // 네트워크 전송
+    if(isOnline) sendMsg({ type:'shoot', x:player.x, y:player.y+8, z:player.z, tx:player.x+dirX*30, ty:player.y+8, tz:player.z+dirZ*30, weapon:5 });
+}
+
 function respawn() {
     const sp = findSafeSpawn();
     player.x = sp.x + (Math.random()-0.5)*20;
@@ -389,16 +878,26 @@ function respawn() {
     player.y = 0;
     player.hp = player.maxHp;
     player.armor = classes[player.selectedClass].armor;
-    player.ammo[player.weapon] = player.maxAmmo[player.weapon];
+    player.currentSlot = 0;
+    player.weapon = player.weaponSlots[0];
+    player.ammo = [30, 8, 5, 1, 12, 1, 3];
     player.reloadTime = 0;
     player.shootCooldown = 0;
     player.killStreak = 0;
     player.scope = false;
+    player.meleeActive = false;
+    player.meleeTime = 0;
+    player.meleeCooldown = 0;
+    player.scytheDashing = false;
+    player.scytheDashTime = 0;
+    player.scytheDashCooldown = 0;
     player.spawnProtection = 180; // 3초 무적
     gameState = 'playing';
+    if(isOnline) sendMsg({ type:'respawn', x:player.x, z:player.z });
 }
 
 function reload() {
+    if(weapons[player.weapon].melee) return; // 낫은 리로드 없음
     if(player.reloadTime <= 0 && player.ammo[player.weapon] < player.maxAmmo[player.weapon]) {
         player.reloadTime = weapons[player.weapon].reloadSpeed;
     }
@@ -412,6 +911,23 @@ function startDash() {
     player.dashDir = {x:dx, z:dz};
 }
 
+function startScytheDash() {
+    player.scytheDashing = true;
+    player.scytheDashTime = 12;
+    player.scytheDashCooldown = 120; // 2초 쿨다운
+    const dx = -Math.sin(yaw), dz = Math.cos(yaw);
+    player.scytheDashDir = {x:dx, z:dz};
+    player.vy = 7; // 높이 올라감 (점프보다 2배)
+    player.onGround = false;
+    player.spawnProtection = 0;
+    // 대시 이펙트
+    for(let i = 0; i < 8; i++) {
+        addParticle(player.x, player.y+8, player.z,
+            (Math.random()-0.5)*3, Math.random()*2, (Math.random()-0.5)*3,
+            '#cc44ff', 15+Math.random()*10, 2+Math.random()*2);
+    }
+}
+
 function useAbility() {
     // Class-specific abilities placeholder
     if(player.dashCooldown > 0) return;
@@ -419,8 +935,10 @@ function useAbility() {
 }
 
 // ====== COLLISION ======
-function checkWallCollision(x, z, radius) {
+function checkWallCollision(x, z, radius, entityY) {
     for(const w of walls) {
+        // 엔티티가 벽 위에 있으면 충돌 무시
+        if(entityY !== undefined && w.h && entityY >= w.h) continue;
         const cx = Math.max(w.x, Math.min(w.x + w.w, x));
         const cz = Math.max(w.z, Math.min(w.z + w.d, z));
         const dx = x - cx, dz = z - cz;
@@ -432,9 +950,10 @@ function checkWallCollision(x, z, radius) {
 function moveWithCollision(entity, dx, dz, radius) {
     const newX = entity.x + dx;
     const newZ = entity.z + dz;
+    const ey = entity.y !== undefined ? entity.y : 0;
 
-    if(!checkWallCollision(newX, entity.z, radius)) entity.x = newX;
-    if(!checkWallCollision(entity.x, newZ, radius)) entity.z = newZ;
+    if(!checkWallCollision(newX, entity.z, radius, ey)) entity.x = newX;
+    if(!checkWallCollision(entity.x, newZ, radius, ey)) entity.z = newZ;
 
     entity.x = Math.max(-MAP_SIZE+5, Math.min(MAP_SIZE-5, entity.x));
     entity.z = Math.max(-MAP_SIZE+5, Math.min(MAP_SIZE-5, entity.z));
@@ -455,14 +974,31 @@ function raycast(ox, oz, dx, dz, maxDist) {
 // ====== SHOOTING ======
 function playerShoot() {
     if(player.shootCooldown > 0 || player.reloadTime > 0) return;
-    if(player.ammo[player.weapon] <= 0) { reload(); return; }
+    const w = weapons[player.weapon];
+
+    // 낫 (3번 슬롯 클릭) = 근접공격
+    if(w.melee) {
+        if(player.meleeCooldown <= 0) {
+            player.meleeActive = true;
+            player.meleeTime = 12;
+            player.meleeCooldown = 20;
+            player.shootCooldown = w.fireRate;
+            meleeAttack();
+        }
+        return;
+    }
+
+    if(player.ammo[player.weapon] <= 0) {
+        if(!w.melee) reload();
+        return;
+    }
     // 사격하면 스폰 보호 해제
     player.spawnProtection = 0;
 
-    const w = weapons[player.weapon];
+    const isGrenade = w.grenade;
     player.shootCooldown = w.fireRate;
     player.ammo[player.weapon]--;
-    player.muzzleFlash = 4;
+    player.muzzleFlash = isGrenade ? 0 : 4;
 
     const pellets = w.pellets || 1;
     for(let p = 0; p < pellets; p++) {
@@ -473,11 +1009,14 @@ function playerShoot() {
         const dirY = Math.sin(pitch + spreadY);
 
         if(w.explosive) {
+            const speed = isGrenade ? 4 : 6;
+            const gLife = isGrenade ? 90 : 120;
+            const gvy = isGrenade ? dirY*speed + 2.5 : dirY*speed; // 수류탄은 포물선
             bullets.push({
                 x:player.x, y:player.y+8, z:player.z,
-                vx:dirX*6, vy:dirY*6, vz:dirZ*6,
-                damage:w.damage, owner:'player', life:120,
-                explosive:true, color:w.color
+                vx:dirX*speed, vy:gvy, vz:dirZ*speed,
+                damage:w.damage, owner:'player', life:gLife,
+                explosive:true, color:w.color, grenade:isGrenade
             });
         } else {
             // Hitscan - 화면 투영 기반 히트 판정
@@ -527,8 +1066,41 @@ function playerShoot() {
                 }
             }
 
+            // 원격 플레이어 피격 판정 (3D 레이캐스트 기반)
+            let hitRemote = false;
+            if(isOnline && remotePlayer && remotePlayer.alive && remotePlayer.spawnProtection <= 0) {
+                const rdx = remotePlayer.x - player.x;
+                const rdz = remotePlayer.z - player.z;
+                const rdy = (remotePlayer.y + 8) - (player.y + 8);
+                const rdist = Math.sqrt(rdx*rdx + rdz*rdz + rdy*rdy);
+                if(rdist <= w.range && rdist >= 1) {
+                    // 레이와 원격 플레이어 사이의 최소 거리 계산
+                    const rayLen = w.range;
+                    const rx = dirX * rayLen, rz = dirZ * rayLen, ry = dirY * rayLen;
+                    // 레이 위의 가장 가까운 점 계산
+                    const t = Math.max(0, Math.min(1, (rdx*rx + rdz*rz + rdy*ry) / (rayLen*rayLen)));
+                    const closestX = player.x + rx * t;
+                    const closestZ = player.z + rz * t;
+                    const closestY = (player.y + 8) + ry * t;
+                    const dx2 = closestX - remotePlayer.x;
+                    const dz2 = closestZ - remotePlayer.z;
+                    const dy2 = closestY - (remotePlayer.y + 8);
+                    const minDist = Math.sqrt(dx2*dx2 + dz2*dz2 + dy2*dy2);
+                    // 히트박스 반경: 몸통 8, 높이 고려
+                    const hitRadius = 10;
+                    if(minDist < hitRadius) {
+                        const dist2d = Math.sqrt(rdx*rdx + rdz*rdz);
+                        const rwc = raycast(player.x, player.z, rdx/(dist2d||1), rdz/(dist2d||1), dist2d);
+                        if(!rwc.hit) {
+                            hitRemote = true;
+                            hitDist = rdist;
+                        }
+                    }
+                }
+            }
+
             // 벽 임팩트 (적 안 맞았을 때)
-            if(!hitEnemy) {
+            if(!hitEnemy && !hitRemote) {
                 const wallHit = raycast(player.x, player.z, dirX, dirZ, w.range);
                 if(wallHit.hit) {
                     for(let i=0;i<3;i++) addParticle(wallHit.x, 8, wallHit.z, (Math.random()-0.5)*2, Math.random()*2, (Math.random()-0.5)*2, '#aaa', 15);
@@ -536,40 +1108,56 @@ function playerShoot() {
                 }
             }
 
-            if(hitEnemy) {
+            if(hitRemote) {
+                // Send hit to remote player
+                const headshot = Math.random() < 0.15;
+                let dmg = w.damage * (headshot ? 2.5 : 1);
+                if(w.pellets) dmg = w.damage;
+                sendMsg({ type: 'hit', damage: dmg, headshot, weaponName: w.name });
+                addDamageNumber(remotePlayer.x, remotePlayer.y+16, remotePlayer.z, Math.round(dmg), headshot);
+                for(let i=0;i<5;i++) addParticle(remotePlayer.x, remotePlayer.y+8, remotePlayer.z, (Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3, remotePlayer.color, 15);
+            } else if(hitEnemy) {
                 const headshot = Math.random() < 0.15;
                 let dmg = w.damage * (headshot ? 2.5 : 1);
                 if(w.pellets) dmg = w.damage;
 
-                if(hitEnemy.armor > 0) {
-                    const armorDmg = Math.min(hitEnemy.armor, dmg*0.6);
-                    hitEnemy.armor -= armorDmg;
-                    dmg *= 0.4;
+                if(isOnline && !isHost) {
+                    // Guest: send bot_hit to host
+                    const botIdx = enemies.indexOf(hitEnemy);
+                    sendMsg({ type: 'bot_hit', botIdx, damage: dmg, headshot, weaponName: w.name });
+                    addDamageNumber(hitEnemy.x, hitEnemy.y+16, hitEnemy.z, Math.round(dmg), headshot);
+                    for(let i=0;i<5;i++) addParticle(hitEnemy.x, hitEnemy.y+8, hitEnemy.z, (Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3, hitEnemy.color, 15);
+                } else {
+                    // Solo or Host: apply damage locally
+                    if(hitEnemy.armor > 0) {
+                        const armorDmg = Math.min(hitEnemy.armor, dmg*0.6);
+                        hitEnemy.armor -= armorDmg;
+                        dmg *= 0.4;
+                    }
+                    hitEnemy.hp -= dmg;
+                    addDamageNumber(hitEnemy.x, hitEnemy.y+16, hitEnemy.z, Math.round(dmg), headshot);
+                    for(let i=0;i<5;i++) addParticle(hitEnemy.x, hitEnemy.y+8, hitEnemy.z, (Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3, hitEnemy.color, 15);
+                    if(hitEnemy.hp <= 0) onEnemyKilled(hitEnemy, headshot);
+                    hitEnemy.state = 'chase';
+                    hitEnemy.stateTimer = 120;
                 }
-                hitEnemy.hp -= dmg;
-                addDamageNumber(hitEnemy.x, hitEnemy.y+16, hitEnemy.z, Math.round(dmg), headshot);
-
-                // Hit particles
-                for(let i=0;i<5;i++) addParticle(hitEnemy.x, hitEnemy.y+8, hitEnemy.z, (Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3, hitEnemy.color, 15);
-
-                if(hitEnemy.hp <= 0) {
-                    onEnemyKilled(hitEnemy, headshot);
-                }
-
-                // Aggro
-                hitEnemy.state = 'chase';
-                hitEnemy.stateTimer = 120;
             }
 
             // Tracer
-            const tracerTx = hitEnemy ? hitEnemy.x : player.x+dirX*hitDist;
-            const tracerTy = hitEnemy ? hitEnemy.y+8 : player.y+8+dirY*hitDist;
-            const tracerTz = hitEnemy ? hitEnemy.z : player.z+dirZ*hitDist;
+            const hitTarget = hitRemote ? remotePlayer : hitEnemy;
+            const tracerTx = hitTarget ? hitTarget.x : player.x+dirX*hitDist;
+            const tracerTy = hitTarget ? hitTarget.y+8 : player.y+8+dirY*hitDist;
+            const tracerTz = hitTarget ? hitTarget.z : player.z+dirZ*hitDist;
             bullets.push({
                 x:player.x, y:player.y+8, z:player.z,
                 tx:tracerTx, ty:tracerTy, tz:tracerTz,
                 life:3, tracer:true, color:w.color
             });
+
+            // Send shoot event for tracer
+            if(isOnline) {
+                sendMsg({ type:'shoot', x:player.x, y:player.y+8, z:player.z, tx:tracerTx, ty:tracerTy, tz:tracerTz, weapon:player.weapon });
+            }
         }
     }
 }
@@ -614,6 +1202,19 @@ function findBotTarget(bot) {
             if(!wallCheck.hit) {
                 bestTarget = { type:'player', x:player.x, z:player.z, dist };
                 bestDist = dist;
+            }
+        }
+    }
+
+    // 원격 플레이어 체크
+    if(isOnline && remotePlayer && remotePlayer.alive && remotePlayer.spawnProtection <= 0) {
+        const rdx = remotePlayer.x - bot.x, rdz = remotePlayer.z - bot.z;
+        const rdist = Math.sqrt(rdx*rdx + rdz*rdz);
+        if(rdist < bestDist && rdist < 250) {
+            const wc = raycast(bot.x, bot.z, rdx/rdist, rdz/rdist, rdist);
+            if(!wc.hit) {
+                bestTarget = { type:'remote', x:remotePlayer.x, z:remotePlayer.z, dist:rdist };
+                bestDist = rdist;
             }
         }
     }
@@ -787,6 +1388,13 @@ function botShoot(bot, target) {
                     gameState = 'dead';
                     player.respawnTimer = 180;
                 }
+            }
+        } else if(target.type === 'remote') {
+            // 원격 플레이어에게 사격 (호스트가 계산하고 전송)
+            if(Math.random() < hitChance && remotePlayer && remotePlayer.alive && remotePlayer.spawnProtection <= 0) {
+                let dmg = w.damage * (0.5 + Math.random()*0.3);
+                sendMsg({ type:'hit', damage:dmg, headshot:false, weaponName:bot.name+'의 '+w.name });
+                addDamageNumber(remotePlayer.x, remotePlayer.y+16, remotePlayer.z, Math.round(dmg), false);
             }
         } else if(target.type === 'bot') {
             // 다른 봇에게 사격
@@ -1049,19 +1657,50 @@ function drawHUD() {
         ctx.fillText(`🛡 ${Math.ceil(player.armor)}`, 120, H-74);
     }
 
-    // Ammo
+    // Weapon slots HUD
+    const slotNames = ['1 주무기', '2 보조', '3 낫', '4 수류탄'];
+    const slotW = 70, slotH = 28, slotGap = 4;
+    const slotsStartX = W - (slotW + slotGap) * 4 - 10;
+    ctx.textAlign = 'center';
+    for(let i = 0; i < 4; i++) {
+        const sx = slotsStartX + i * (slotW + slotGap);
+        const sy = H - 95;
+        const isActive = player.currentSlot === i;
+        ctx.fillStyle = isActive ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.4)';
+        ctx.fillRect(sx, sy, slotW, slotH);
+        ctx.strokeStyle = isActive ? weapons[player.weaponSlots[i]].color : 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = isActive ? 2 : 1;
+        ctx.strokeRect(sx, sy, slotW, slotH);
+        ctx.font = isActive ? 'bold 11px Segoe UI' : '10px Segoe UI';
+        ctx.fillStyle = isActive ? '#fff' : '#999';
+        ctx.fillText(slotNames[i], sx + slotW/2, sy + 18);
+    }
+
+    // Ammo (낫은 탄약 없음)
     ctx.textAlign = 'right';
-    ctx.font = 'bold 28px Segoe UI';
-    ctx.fillStyle = player.ammo[player.weapon] <= 5 ? '#f44' : '#fff';
-    ctx.fillText(player.ammo[player.weapon] + '', W-80, H-35);
-    ctx.font = '16px Segoe UI';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText('/ ' + player.maxAmmo[player.weapon], W-30, H-35);
+    if(!w.melee) {
+        ctx.font = 'bold 28px Segoe UI';
+        ctx.fillStyle = player.ammo[player.weapon] <= 5 ? '#f44' : '#fff';
+        ctx.fillText(player.ammo[player.weapon] + '', W-80, H-35);
+        ctx.font = '16px Segoe UI';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText('/ ' + player.maxAmmo[player.weapon], W-30, H-35);
+    } else {
+        ctx.font = 'bold 28px Segoe UI';
+        ctx.fillStyle = '#cc44ff';
+        ctx.fillText('∞', W-50, H-35);
+    }
 
     // Weapon name
     ctx.font = 'bold 14px Segoe UI';
     ctx.fillStyle = w.color;
     ctx.fillText(w.name, W-30, H-60);
+
+    // F키 힌트
+    ctx.textAlign = 'left';
+    ctx.font = '11px Segoe UI';
+    ctx.fillStyle = player.meleeCooldown > 0 ? '#666' : '#cc44ff';
+    ctx.fillText('[F] 근접공격', 20, H-20);
 
     // Reload indicator
     if(player.reloadTime > 0) {
@@ -1167,6 +1806,13 @@ function drawHUD() {
     ctx.fillStyle = cls.color;
     ctx.fillText(`${cls.name}`, 20, 50);
 
+    // Online indicator
+    if(isOnline) {
+        ctx.fillStyle = '#55aaff';
+        ctx.font = '12px Segoe UI';
+        ctx.fillText(`온라인 | 방: ${roomCode}`, 20, 68);
+    }
+
     // Kill feed
     ctx.textAlign = 'right';
     ctx.font = '12px Segoe UI';
@@ -1215,6 +1861,14 @@ function drawHUD() {
         ctx.beginPath(); ctx.arc(ex, ez, 2, 0, Math.PI*2); ctx.fill();
     });
 
+    // Remote player on minimap
+    if(isOnline && remotePlayer && remotePlayer.alive) {
+        const rx = mmX + (remotePlayer.x + MAP_SIZE) * mmScale;
+        const rz = mmY + (remotePlayer.z + MAP_SIZE) * mmScale;
+        ctx.fillStyle = '#ffaa00';
+        ctx.beginPath(); ctx.arc(rx, rz, 3, 0, Math.PI*2); ctx.fill();
+    }
+
     // Damage flash
     if(player.damageFlash > 0) {
         ctx.fillStyle = `rgba(255,0,0,${player.damageFlash/30})`;
@@ -1224,23 +1878,33 @@ function drawHUD() {
     // Weapon model
     drawWeaponModel();
 
-    // Dash cooldown
+    // Dash cooldown (돌격병)
     if(player.selectedClass === 0) {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(20, H-110, 80, 14);
+        ctx.fillRect(20, H-130, 80, 14);
         ctx.fillStyle = player.dashCooldown <= 0 ? '#4f4' : '#666';
-        ctx.fillRect(20, H-110, 80*(1-player.dashCooldown/classes[0].abilityCooldown), 14);
+        ctx.fillRect(20, H-130, 80*(1-player.dashCooldown/classes[0].abilityCooldown), 14);
         ctx.fillStyle = '#fff';
         ctx.font = '10px Segoe UI';
         ctx.textAlign = 'center';
-        ctx.fillText(player.dashCooldown <= 0 ? 'Shift 대시' : Math.ceil(player.dashCooldown/60)+'s', 60, H-100);
+        ctx.fillText(player.dashCooldown <= 0 ? 'Shift 대시' : Math.ceil(player.dashCooldown/60)+'s', 60, H-120);
     }
+
+    // 낫 대시 쿨다운
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(20, H-110, 80, 14);
+    ctx.fillStyle = player.scytheDashCooldown <= 0 ? '#c4f' : '#666';
+    ctx.fillRect(20, H-110, 80*(1-player.scytheDashCooldown/120), 14);
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText(player.scytheDashCooldown <= 0 ? '우클릭 낫대시' : Math.ceil(player.scytheDashCooldown/60)+'s', 60, H-100);
 
     // Controls hint
     ctx.textAlign = 'left';
     ctx.font = '10px Segoe UI';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText('WASD:이동 | 마우스:조준 | 좌클릭:사격 | 우클릭:스코프 | R:재장전 | Tab:스코어', 20, H-10);
+    ctx.fillText('WASD:이동 | 좌클릭:사격 | 우클릭:낫대시/스코프 | F:근접공격 | 1~4:무기 | R:재장전 | Tab:스코어', 20, H-10);
 }
 
 function drawWeaponModel() {
@@ -1348,32 +2012,111 @@ function drawWeaponModel() {
         ctx.fillStyle = '#c4956a';
         ctx.fillRect(-30, -80, 22, 24);
         ctx.fillRect(8, -45, 22, 24);
-        // 발사관
         ctx.fillStyle = '#3a5a3a';
         ctx.fillRect(-18, -170, 36, 140);
-        // 발사구 (위)
         ctx.fillStyle = '#2a2a2a';
-        ctx.beginPath();
-        ctx.arc(0, -175, 20, 0, Math.PI*2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(0, -175, 20, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#111';
-        ctx.beginPath();
-        ctx.arc(0, -175, 15, 0, Math.PI*2);
-        ctx.fill();
-        // 그립
+        ctx.beginPath(); ctx.arc(0, -175, 15, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#444';
         ctx.fillRect(4, -25, 14, 28);
-        // 조준기
         ctx.fillStyle = '#555';
-        ctx.fillRect(-22, -160, 4, 12);
-        ctx.fillRect(18, -160, 4, 12);
-        // 악센트
+        ctx.fillRect(-22, -160, 4, 12); ctx.fillRect(18, -160, 4, 12);
         ctx.fillStyle = w.color;
-        ctx.fillRect(-20, -172, 40, 2);
-        ctx.fillRect(-20, -35, 40, 2);
+        ctx.fillRect(-20, -172, 40, 2); ctx.fillRect(-20, -35, 40, 2);
+    } else if(wpnIdx === 4) {
+        // ===== 권총 =====
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(2, -40, 20, 24); // 오른손
+        // 총몸
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(-6, -90, 18, 55);
+        // 총열
+        ctx.fillStyle = '#444';
+        ctx.fillRect(-4, -120, 14, 35);
+        // 슬라이드
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-8, -95, 22, 12);
+        // 그립
+        ctx.fillStyle = '#3a3a3a';
+        ctx.fillRect(-2, -20, 14, 25);
+        // 악센트
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(-8, -97, 22, 2);
+    } else if(wpnIdx === 5) {
+        // ===== 낫 =====
+        const swingAngle = player.meleeActive ? (1 - player.meleeTime/12) * Math.PI * 0.8 - 0.4 : 0;
+        ctx.rotate(swingAngle);
+        // 손
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(-5, -50, 18, 26);
+        // 자루
+        ctx.fillStyle = '#5a4030';
+        ctx.fillRect(-3, -170, 10, 130);
+        // 날 (곡선)
+        ctx.strokeStyle = '#cc44ff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(3, -170);
+        ctx.quadraticCurveTo(50, -180, 55, -140);
+        ctx.stroke();
+        // 날 면
+        ctx.fillStyle = 'rgba(204,68,255,0.3)';
+        ctx.beginPath();
+        ctx.moveTo(3, -170);
+        ctx.quadraticCurveTo(50, -180, 55, -140);
+        ctx.lineTo(3, -145);
+        ctx.fill();
+        // 날 끝
+        ctx.fillStyle = '#cc44ff';
+        ctx.beginPath(); ctx.arc(55, -140, 3, 0, Math.PI*2); ctx.fill();
+    } else if(wpnIdx === 6) {
+        // ===== 수류탄 =====
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(-8, -50, 20, 24); // 손
+        // 몸통
+        ctx.fillStyle = '#3a5a3a';
+        ctx.beginPath(); ctx.arc(2, -80, 16, 0, Math.PI*2); ctx.fill();
+        // 레버
+        ctx.fillStyle = '#777';
+        ctx.fillRect(-2, -100, 4, 22);
+        // 핀
+        ctx.fillStyle = '#ddd';
+        ctx.beginPath(); ctx.arc(6, -100, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(6, -100, 2, 0, Math.PI*2);
+        ctx.fillStyle = '#aaa'; ctx.fill();
+        // 줄무늬
+        ctx.fillStyle = '#44cc44';
+        ctx.fillRect(-14, -84, 32, 3);
+        ctx.fillRect(-14, -76, 32, 3);
     }
 
     ctx.restore();
+
+    // F키 근접공격 이펙트 (현재 무기와 별개로)
+    if(player.meleeActive && wpnIdx !== 5) {
+        ctx.save();
+        const swingProgress = 1 - player.meleeTime/12;
+        const swingAngle = swingProgress * Math.PI * 0.8 - 0.4;
+        const slashX = W/2 + 60;
+        const slashY = H - 150;
+        ctx.translate(slashX, slashY);
+        ctx.rotate(swingAngle - 0.5);
+        // 빠른 낫 슬래시 이펙트
+        ctx.strokeStyle = `rgba(204,68,255,${1 - swingProgress})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(30, -30, 40, -60);
+        ctx.stroke();
+        // 슬래시 호
+        ctx.strokeStyle = `rgba(204,68,255,${0.6 - swingProgress*0.6})`;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(0, -30, 50, -Math.PI*0.3, Math.PI*0.3);
+        ctx.stroke();
+        ctx.restore();
+    }
 
     // 머즐 플래시 (총구 위치에서)
     if(player.muzzleFlash > 0) {
@@ -1432,15 +2175,184 @@ function drawTitle() {
     ctx.fillStyle = '#ff6b35';
     ctx.fillText('라이벌 FPS', W/2, H/2 - 20);
 
-    ctx.font = '18px Segoe UI';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText('클릭 또는 스페이스바를 눌러 시작', W/2, H/2 + 40);
+    // Buttons
+    const btnW = 200, btnH = 50;
+
+    // Solo button
+    const soloX = W/2 - btnW - 20, soloY = H/2 + 30;
+    const soloHover = canvasMouseX >= soloX && canvasMouseX <= soloX+btnW && canvasMouseY >= soloY && canvasMouseY <= soloY+btnH;
+    ctx.fillStyle = soloHover ? 'rgba(255,100,100,0.4)' : 'rgba(255,100,100,0.2)';
+    ctx.strokeStyle = '#ff5555';
+    ctx.lineWidth = 2;
+    ctx.fillRect(soloX, soloY, btnW, btnH);
+    ctx.strokeRect(soloX, soloY, btnW, btnH);
+    ctx.font = 'bold 20px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('혼자 하기', soloX + btnW/2, soloY + 33);
+    if(soloHover) canvas.style.cursor = 'pointer';
+
+    // Online button
+    const onX = W/2 + 20, onY = H/2 + 30;
+    const onHover = canvasMouseX >= onX && canvasMouseX <= onX+btnW && canvasMouseY >= onY && canvasMouseY <= onY+btnH;
+    ctx.fillStyle = onHover ? 'rgba(100,200,255,0.4)' : 'rgba(100,200,255,0.2)';
+    ctx.strokeStyle = '#55aaff';
+    ctx.fillRect(onX, onY, btnW, btnH);
+    ctx.strokeRect(onX, onY, btnW, btnH);
+    ctx.font = 'bold 20px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('온라인 대전', onX + btnW/2, onY + 33);
+    if(onHover) canvas.style.cursor = 'pointer';
 
     // Controls
     ctx.font = '14px Segoe UI';
     ctx.fillStyle = '#666';
-    ctx.fillText('WASD: 이동 | 마우스: 조준 | 좌클릭: 사격 | R: 재장전', W/2, H/2 + 80);
-    ctx.fillText('우클릭: 스코프 | Tab: 스코어보드 | Shift: 대시', W/2, H/2 + 100);
+    ctx.fillText('WASD: 이동 | 마우스: 조준 | 좌클릭: 사격 | R: 재장전', W/2, H/2 + 120);
+    ctx.fillText('우클릭: 스코프 | Tab: 스코어보드 | Shift: 대시', W/2, H/2 + 140);
+}
+
+function drawLobby() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+    canvas.style.cursor = 'default';
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 42px Segoe UI';
+    ctx.fillStyle = '#55aaff';
+    ctx.fillText('온라인 대전', W/2, 80);
+
+    const btnW = 260, btnH = 60;
+
+    // Create Room
+    const crX = W/2 - btnW/2, crY = 160;
+    const crHover = canvasMouseX >= crX && canvasMouseX <= crX+btnW && canvasMouseY >= crY && canvasMouseY <= crY+btnH;
+    ctx.fillStyle = crHover ? 'rgba(100,255,150,0.3)' : 'rgba(100,255,150,0.1)';
+    ctx.strokeStyle = '#55ff88';
+    ctx.lineWidth = 2;
+    ctx.fillRect(crX, crY, btnW, btnH);
+    ctx.strokeRect(crX, crY, btnW, btnH);
+    ctx.font = 'bold 24px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('방 만들기', W/2, crY + 40);
+    if(crHover) canvas.style.cursor = 'pointer';
+
+    // Join Room
+    const jrY = 260;
+    const jrHover = canvasMouseX >= crX && canvasMouseX <= crX+btnW && canvasMouseY >= jrY && canvasMouseY <= jrY+btnH;
+    ctx.fillStyle = jrHover ? 'rgba(255,200,100,0.3)' : 'rgba(255,200,100,0.1)';
+    ctx.strokeStyle = '#ffaa44';
+    ctx.fillRect(crX, jrY, btnW, btnH);
+    ctx.strokeRect(crX, jrY, btnW, btnH);
+    ctx.font = 'bold 24px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('방 참가', W/2, jrY + 40);
+    if(jrHover) canvas.style.cursor = 'pointer';
+
+    // Join code input area (shown when lobbyMode is 'join')
+    if(lobbyMode === 'join') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(W/2-180, 370, 360, 130);
+        ctx.strokeStyle = '#ffaa44';
+        ctx.strokeRect(W/2-180, 370, 360, 130);
+
+        ctx.font = '18px Segoe UI';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText('방 코드 4자리를 입력하세요', W/2, 400);
+
+        // Code display
+        ctx.font = 'bold 48px Courier New';
+        ctx.fillStyle = '#fff';
+        const displayCode = roomCodeInput + '_'.repeat(4 - roomCodeInput.length);
+        ctx.fillText(displayCode, W/2, 455);
+
+        ctx.font = '14px Segoe UI';
+        ctx.fillStyle = '#888';
+        ctx.fillText('Enter로 참가 | Esc로 취소', W/2, 490);
+    }
+
+    // Back button
+    ctx.font = '16px Segoe UI';
+    ctx.fillStyle = '#888';
+    ctx.fillText('Esc: 뒤로가기', W/2, H - 40);
+
+    // Network message
+    if(netMessageTimer > 0) {
+        ctx.font = 'bold 18px Segoe UI';
+        ctx.fillStyle = `rgba(255,255,100,${Math.min(1, netMessageTimer/30)})`;
+        ctx.fillText(netMessage, W/2, H - 80);
+    }
+}
+
+function drawWaiting() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+    canvas.style.cursor = 'default';
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 36px Segoe UI';
+    ctx.fillStyle = '#55aaff';
+    ctx.fillText('대기실', W/2, 80);
+
+    if(myClassSelected) {
+        // 클래스 선택 완료, 상대방 대기 중
+        ctx.font = '20px Segoe UI';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText('상대방이 클래스를 선택할 때까지 대기 중...', W/2, 130);
+
+        // 선택한 클래스 표시
+        const cls = classes[player.selectedClass];
+        ctx.font = 'bold 48px Segoe UI';
+        ctx.fillStyle = cls.color;
+        ctx.fillText(cls.name, W/2, 250);
+
+        ctx.font = '18px Segoe UI';
+        ctx.fillStyle = '#888';
+        ctx.fillText('클래스 선택 완료', W/2, 290);
+
+        // 로딩 애니메이션
+        const dots = '.'.repeat((Math.floor(frameCount / 30) % 3) + 1);
+        ctx.font = '24px Segoe UI';
+        ctx.fillStyle = '#55aaff';
+        ctx.fillText('대기 중' + dots, W/2, 370);
+    } else {
+        ctx.font = '20px Segoe UI';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(isHost ? '친구에게 아래 코드를 공유하세요' : '호스트가 게임을 시작할 때까지 대기 중...', W/2, 130);
+
+        // Room code display
+        ctx.font = 'bold 72px Courier New';
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#55aaff';
+        ctx.shadowBlur = 20;
+        ctx.fillText(roomCode, W/2, 230);
+        ctx.shadowBlur = 0;
+
+        ctx.font = '16px Segoe UI';
+        ctx.fillStyle = '#888';
+        ctx.fillText('방 코드', W/2, 260);
+
+        // Player list
+        ctx.font = '18px Segoe UI';
+        ctx.fillStyle = '#4f4';
+        ctx.fillText('● 나 (호스트)', W/2, 320);
+        if(remotePlayer || (!isHost && networkState === 'waiting')) {
+            ctx.fillStyle = '#ffaa00';
+            ctx.fillText('● 상대방', W/2, 350);
+        } else {
+            ctx.fillStyle = '#666';
+            ctx.fillText('○ 대기 중...', W/2, 350);
+        }
+    }
+
+    ctx.font = '14px Segoe UI';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Esc: 나가기', W/2, H - 40);
+
+    // Network message
+    if(netMessageTimer > 0) {
+        ctx.font = 'bold 18px Segoe UI';
+        ctx.fillStyle = `rgba(100,255,100,${Math.min(1, netMessageTimer/30)})`;
+        ctx.fillText(netMessage, W/2, H - 80);
+    }
 }
 
 function drawClassSelect() {
@@ -1564,6 +2476,7 @@ function drawScoreboard() {
     // All players sorted by kills
     const allPlayers = [
         {name:'나 (플레이어)', kills:player.kills, deaths:player.deaths, cls:classes[player.selectedClass], isPlayer:true},
+        ...(isOnline && remotePlayer ? [{name:remotePlayer.name, kills:remotePlayer.kills, deaths:remotePlayer.deaths, cls:classes[remotePlayer.selectedClass]||classes[0], isPlayer:false, isRemote:true}] : []),
         ...enemies.map(e => ({name:e.name, kills:e.kills, deaths:e.deaths, cls:classes[e.class], isPlayer:false}))
     ].sort((a,b) => b.kills - a.kills);
 
@@ -1576,7 +2489,7 @@ function drawScoreboard() {
 
         ctx.font = '13px Segoe UI';
         ctx.textAlign = 'left';
-        ctx.fillStyle = p.isPlayer ? '#4f4' : '#fff';
+        ctx.fillStyle = p.isPlayer ? '#4f4' : p.isRemote ? '#ffaa00' : '#fff';
         ctx.fillText(p.name, W/2-260, y);
         ctx.fillStyle = p.cls.color;
         ctx.fillText(p.cls.name, W/2-100, y);
@@ -1607,6 +2520,17 @@ function update() {
             player.dashTime--;
             if(player.dashTime <= 0) player.dashing = false;
             moveWithCollision(player, mx * player.speed * 3, mz * player.speed * 3, 5);
+        } else if(player.scytheDashing) {
+            // 낫 대시: 앞으로 빠르게 이동 (높이는 vy로 처리)
+            player.scytheDashTime--;
+            if(player.scytheDashTime <= 0) player.scytheDashing = false;
+            moveWithCollision(player, player.scytheDashDir.x * player.speed * 2.5, player.scytheDashDir.z * player.speed * 2.5, 5);
+            // 대시 중 보라색 파티클
+            if(frameCount % 2 === 0) {
+                addParticle(player.x, player.y+5, player.z,
+                    (Math.random()-0.5)*2, Math.random()*1, (Math.random()-0.5)*2,
+                    '#cc44ff', 10, 2);
+            }
         } else {
             const spd = player.scope ? player.speed * 0.4 : player.speed;
             moveWithCollision(player, mx * spd, mz * spd, 5);
@@ -1619,18 +2543,31 @@ function update() {
         }
         player.vy -= 0.4; // gravity
         player.y += player.vy;
-        if(player.y <= 0) { player.y = 0; player.vy = 0; player.onGround = true; }
+        // 벽 위 착지 처리
+        let floorY = 0;
+        for(const w of walls) {
+            if(w.h && player.x + 5 > w.x && player.x - 5 < w.x + w.w &&
+               player.z + 5 > w.z && player.z - 5 < w.z + w.d) {
+                if(player.y <= w.h && player.y + player.vy <= w.h && player.vy <= 0) {
+                    if(floorY < w.h) floorY = w.h;
+                }
+            }
+        }
+        if(player.y <= floorY) { player.y = floorY; player.vy = 0; player.onGround = true; }
 
         // Spawn protection countdown
         if(player.spawnProtection > 0) {
             player.spawnProtection--;
         }
 
-        // Shooting
+        // Shooting & melee
         player.shootCooldown = Math.max(0, player.shootCooldown-1);
         player.muzzleFlash = Math.max(0, player.muzzleFlash-1);
         player.damageFlash = Math.max(0, player.damageFlash-1);
         player.dashCooldown = Math.max(0, player.dashCooldown-1);
+        player.scytheDashCooldown = Math.max(0, player.scytheDashCooldown-1);
+        player.meleeCooldown = Math.max(0, player.meleeCooldown-1);
+        if(player.meleeTime > 0) { player.meleeTime--; if(player.meleeTime <= 0) player.meleeActive = false; }
 
         if(player.reloadTime > 0) {
             player.reloadTime--;
@@ -1642,8 +2579,8 @@ function update() {
         if(shooting && weapons[player.weapon].auto) playerShoot();
         else if(shooting) { playerShoot(); shooting = false; }
 
-        // Update bots
-        enemies.forEach(updateBot);
+        // Update bots (solo mode only)
+        if(!isOnline) enemies.forEach(updateBot);
 
         // Update bullets
         for(let i = bullets.length-1; i >= 0; i--) {
@@ -1718,9 +2655,46 @@ function update() {
         killFeed.forEach(kf => kf.time--);
         killFeed = killFeed.filter(kf => kf.time > 0);
 
-        // Spawn bots
-        while(enemies.length < MAX_ENEMIES) spawnEnemy();
+        // Spawn bots (solo mode only)
+        if(!isOnline) {
+            const maxBots = 8;
+            while(enemies.length < maxBots) spawnEnemy();
+        }
+
+        // Network sync
+        if(isOnline) {
+            // Interpolate remote player
+            if(remotePlayer) {
+                remotePlayer.interpT = Math.min(1, remotePlayer.interpT + 0.25);
+                const t = remotePlayer.interpT;
+                remotePlayer.x = remotePlayer.prevX + (remotePlayer.targetX - remotePlayer.prevX) * t;
+                remotePlayer.z = remotePlayer.prevZ + (remotePlayer.targetZ - remotePlayer.prevZ) * t;
+                remotePlayer.y = remotePlayer.prevY + (remotePlayer.targetY - remotePlayer.prevY) * t;
+                remotePlayer.muzzleFlash = Math.max(0, remotePlayer.muzzleFlash - 1);
+            }
+
+            // Send player state at 15Hz
+            if(frameCount % 4 === 0) {
+                sendMsg({
+                    type:'player_state',
+                    x:player.x, z:player.z, y:player.y,
+                    yaw, pitch,
+                    hp:player.hp, armor:player.armor,
+                    weapon:player.weapon,
+                    selectedClass:player.selectedClass,
+                    kills:player.kills, deaths:player.deaths,
+                    muzzleFlash:player.muzzleFlash,
+                    spawnProtection:player.spawnProtection
+                });
+            }
+
+            // (봇 상태 전송 제거 - 온라인은 1v1 전용)
+        }
+        frameCount++;
     }
+
+    // Network message timer
+    if(netMessageTimer > 0) netMessageTimer--;
 }
 
 // ====== RENDER LOOP ======
@@ -1728,6 +2702,8 @@ function render() {
     ctx.clearRect(0,0,W,H);
 
     if(gameState === 'title') { drawTitle(); }
+    else if(gameState === 'lobby') { drawLobby(); }
+    else if(gameState === 'waiting') { drawWaiting(); }
     else if(gameState === 'classSelect') { drawClassSelect(); }
     else {
         drawGround();
@@ -1748,6 +2724,13 @@ function render() {
         }).sort((a,b) => b.dist - a.dist);
 
         sortedEnemies.forEach(e => drawEnemy(e));
+
+        // Draw remote player
+        if(isOnline && remotePlayer && remotePlayer.alive) {
+            const rdx = remotePlayer.x - player.x, rdz = remotePlayer.z - player.z;
+            const rDist = rdx*rdx + rdz*rdz;
+            drawEnemy({...remotePlayer, class: remotePlayer.selectedClass, dist: rDist, ref: remotePlayer});
+        }
 
         // Draw bullets
         bullets.forEach(b => {
@@ -1823,14 +2806,105 @@ function render() {
 
 // ====== GAME LOOP ======
 generateMap();
-for(let i = 0; i < MAX_ENEMIES; i++) spawnEnemy();
+for(let i = 0; i < 8; i++) spawnEnemy();
 
-function gameLoop() {
-    update();
+// 고정 60fps 게임 루프 (모든 플레이어 동일 속도)
+let lastTime = 0;
+let accumulator = 0;
+const FIXED_DT = 1000 / 60; // 16.67ms
+
+function gameLoop(timestamp) {
+    if(!lastTime) lastTime = timestamp;
+    const elapsed = Math.min(timestamp - lastTime, 100); // 최대 100ms (탭 비활성 방지)
+    lastTime = timestamp;
+    accumulator += elapsed;
+
+    while(accumulator >= FIXED_DT) {
+        update();
+        accumulator -= FIXED_DT;
+    }
     render();
     requestAnimationFrame(gameLoop);
 }
-gameLoop();
+requestAnimationFrame(gameLoop);
+
+// ===== 모바일 FPS 터치 컨트롤 =====
+if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+  document.getElementById('fpsControls').style.display='block';
+
+  // 이동 조이스틱 (왼쪽)
+  const joyL=document.getElementById('fps-joy-left');
+  const knobL=joyL.querySelector('.fps-joy-knob');
+  let joyLId=null;
+  joyL.addEventListener('pointerdown',e=>{
+    e.preventDefault();joyLId=e.pointerId;joyL.setPointerCapture(e.pointerId);
+  },{passive:false});
+  joyL.addEventListener('pointermove',e=>{
+    if(e.pointerId!==joyLId)return;
+    const r=joyL.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    let dx=e.clientX-cx, dy=e.clientY-cy;
+    const dist=Math.sqrt(dx*dx+dy*dy), maxR=50;
+    if(dist>maxR){dx=dx/dist*maxR;dy=dy/dist*maxR;}
+    knobL.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const deadzone=15;
+    keys['KeyW']=dy<-deadzone; keys['KeyS']=dy>deadzone;
+    keys['KeyA']=dx<-deadzone; keys['KeyD']=dx>deadzone;
+  });
+  const resetL=()=>{joyLId=null;knobL.style.transform='translate(-50%,-50%)';keys['KeyW']=false;keys['KeyS']=false;keys['KeyA']=false;keys['KeyD']=false;};
+  joyL.addEventListener('pointerup',resetL);
+  joyL.addEventListener('pointercancel',resetL);
+
+  // 시점 조이스틱 (오른쪽)
+  const joyR=document.getElementById('fps-joy-right');
+  const knobR=joyR.querySelector('.fps-joy-knob');
+  let joyRId=null;
+  joyR.addEventListener('pointerdown',e=>{
+    e.preventDefault();joyRId=e.pointerId;joyR.setPointerCapture(e.pointerId);
+  },{passive:false});
+  joyR.addEventListener('pointermove',e=>{
+    if(e.pointerId!==joyRId)return;
+    const r=joyR.getBoundingClientRect();
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    let dx=e.clientX-cx, dy=e.clientY-cy;
+    const dist=Math.sqrt(dx*dx+dy*dy), maxR=50;
+    if(dist>maxR){dx=dx/dist*maxR;dy=dy/dist*maxR;}
+    knobR.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    yaw+=dx*0.002; pitch-=dy*0.002;
+    pitch=Math.max(-Math.PI/2.5,Math.min(Math.PI/2.5,pitch));
+  });
+  const resetR=()=>{joyRId=null;knobR.style.transform='translate(-50%,-50%)';};
+  joyR.addEventListener('pointerup',resetR);
+  joyR.addEventListener('pointercancel',resetR);
+
+  // 사격 버튼
+  document.getElementById('fps-shoot').addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    if(gameState==='playing'&&player.hp>0)shoot();
+  },{passive:false});
+
+  // 점프 버튼
+  document.getElementById('fps-jump').addEventListener('pointerdown',e=>{
+    e.preventDefault(); keys['Space']=true;
+    setTimeout(()=>{keys['Space']=false;},100);
+  },{passive:false});
+
+  // 타이틀/클래스 선택에서 캔버스 터치로 진행
+  canvas.addEventListener('touchstart',e=>{
+    if(gameState==='title'){gameState='classSelect';}
+  });
+
+  document.addEventListener('touchmove',e=>{
+    if(e.target.closest('#fpsControls'))e.preventDefault();
+  },{passive:false});
+}
 </script>
+
+<div id="fpsControls">
+  <div class="fps-joy" id="fps-joy-left"><div class="fps-joy-knob"></div></div>
+  <div class="fps-joy" id="fps-joy-right"><div class="fps-joy-knob"></div></div>
+  <div id="fps-shoot">사격</div>
+  <div id="fps-jump">점프</div>
+</div>
 </body>
 </html>

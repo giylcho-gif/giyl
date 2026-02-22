@@ -6,8 +6,21 @@
 <title>격투의 전설 - Legend of Fighters</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0018;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
+body{background:#0a0018;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 canvas{border-radius:8px;box-shadow:0 0 40px rgba(255,100,50,0.3);max-width:100vw;max-height:100vh}
+@media(max-width:768px){canvas{max-height:55vh!important}}
+#fightPad{display:none;position:fixed;bottom:0;left:0;right:0;height:155px;z-index:1000;touch-action:none;pointer-events:none}
+#fightPad .fp-btn{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;touch-action:none;user-select:none;border:2px solid rgba(255,255,255,0.3)}
+#fightPad .fp-btn:active{filter:brightness(1.5)}
+#fp-left{width:50px;height:50px;left:12px;bottom:50px;background:rgba(60,60,80,0.7);font-size:18px}
+#fp-right{width:50px;height:50px;left:76px;bottom:50px;background:rgba(60,60,80,0.7);font-size:18px}
+#fp-up{width:50px;height:50px;left:44px;bottom:108px;background:rgba(60,60,80,0.7);font-size:18px}
+#fp-down{width:50px;height:50px;left:44px;bottom:-2px;background:rgba(60,60,80,0.7);font-size:18px}
+#fp-lp{width:50px;height:50px;right:90px;bottom:95px;background:rgba(50,100,220,0.7);font-size:11px}
+#fp-hp{width:50px;height:50px;right:30px;bottom:95px;background:rgba(220,50,50,0.7);font-size:11px}
+#fp-lk{width:50px;height:50px;right:90px;bottom:35px;background:rgba(50,180,80,0.7);font-size:11px}
+#fp-hk{width:50px;height:50px;right:30px;bottom:35px;background:rgba(220,150,30,0.7);font-size:11px}
+#fp-start{position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:60px;height:26px;border-radius:13px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);pointer-events:auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;touch-action:none}
 </style>
 </head>
 <body>
@@ -1311,6 +1324,33 @@ window.addEventListener('keyup', e => { keys[e.key] = false; });
 window.addEventListener('blur', () => { keys = {}; });
 
 gameLoop();
+
+// ===== 모바일 격투 터치 컨트롤 =====
+if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+  document.getElementById('fightPad').style.display='block';
+  const bmap={'fp-left':'ArrowLeft','fp-right':'ArrowRight','fp-up':'ArrowUp','fp-down':'ArrowDown',
+    'fp-lp':'a','fp-hp':'s','fp-lk':'d','fp-hk':'f','fp-start':'Enter'};
+  Object.entries(bmap).forEach(([id,k])=>{
+    const el=document.getElementById(id);
+    el.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;},{passive:false});
+    el.addEventListener('pointerup',e=>{e.preventDefault();keys[k]=false;},{passive:false});
+    el.addEventListener('pointercancel',()=>{keys[k]=false;});
+    el.addEventListener('pointerleave',()=>{keys[k]=false;});
+  });
+  document.addEventListener('touchmove',e=>{e.preventDefault();},{passive:false});
+}
 </script>
+
+<div id="fightPad">
+  <div class="fp-btn" id="fp-left">◀</div>
+  <div class="fp-btn" id="fp-right">▶</div>
+  <div class="fp-btn" id="fp-up">▲</div>
+  <div class="fp-btn" id="fp-down">▼</div>
+  <div class="fp-btn" id="fp-lp">LP</div>
+  <div class="fp-btn" id="fp-hp">HP</div>
+  <div class="fp-btn" id="fp-lk">LK</div>
+  <div class="fp-btn" id="fp-hk">HK</div>
+  <div id="fp-start">START</div>
+</div>
 </body>
 </html>

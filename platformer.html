@@ -2,12 +2,20 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>platformer</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Segoe UI',sans-serif}
+body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Segoe UI',sans-serif;touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 canvas{border-radius:8px;box-shadow:0 0 40px rgba(0,150,255,.3)}
+@media(max-width:768px){canvas{max-width:100vw!important;max-height:70vh!important}}
 #ui{position:absolute;top:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:14px;pointer-events:none;text-align:center}
+#mobileControls{display:none;position:fixed;bottom:0;left:0;right:0;height:130px;z-index:1000;touch-action:none;pointer-events:none}
+#mobileControls .mc-btn{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:bold;color:#fff;border:2px solid rgba(74,144,217,0.5);background:rgba(26,26,46,0.7);backdrop-filter:blur(4px);touch-action:none;user-select:none}
+#mobileControls .mc-btn:active{background:rgba(74,144,217,0.5)}
+#pmc-left{width:64px;height:64px;left:20px;bottom:35px}
+#pmc-right{width:64px;height:64px;left:100px;bottom:35px}
+#pmc-jump{width:80px;height:80px;right:20px;bottom:30px;background:rgba(40,80,180,0.7);border-color:rgba(100,150,255,0.7);font-size:16px}
 </style>
 </head>
 <body>
@@ -1045,6 +1053,38 @@ window.addEventListener('blur',()=>{keys={};});
 
 // ===== START =====
 gameLoop();
+
+// ===== 모바일 터치 컨트롤 =====
+if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+  document.getElementById('mobileControls').style.display='block';
+  const vw=window.innerWidth;
+  if(vw<800){
+    const s=Math.min(vw/W,(window.innerHeight*0.7)/H);
+    canvas.style.width=Math.floor(W*s)+'px';canvas.style.height=Math.floor(H*s)+'px';
+  }
+  window.addEventListener('resize',()=>{
+    const vw2=window.innerWidth;
+    if(vw2<800){const s=Math.min(vw2/W,(window.innerHeight*0.7)/H);canvas.style.width=Math.floor(W*s)+'px';canvas.style.height=Math.floor(H*s)+'px';}
+  });
+
+  const bmap={
+    'pmc-left':'ArrowLeft','pmc-right':'ArrowRight','pmc-jump':' '
+  };
+  Object.entries(bmap).forEach(([id,k])=>{
+    const el=document.getElementById(id);
+    el.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;},{passive:false});
+    el.addEventListener('pointerup',e=>{e.preventDefault();keys[k]=false;},{passive:false});
+    el.addEventListener('pointercancel',()=>{keys[k]=false;});
+    el.addEventListener('pointerleave',()=>{keys[k]=false;});
+  });
+  document.addEventListener('touchmove',e=>{e.preventDefault();},{passive:false});
+}
 </script>
+
+<div id="mobileControls">
+  <div class="mc-btn" id="pmc-left">◀</div>
+  <div class="mc-btn" id="pmc-right">▶</div>
+  <div class="mc-btn" id="pmc-jump">점프</div>
+</div>
 </body>
 </html>

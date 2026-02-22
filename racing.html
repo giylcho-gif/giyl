@@ -6,7 +6,14 @@
 <title>🏍️ 모토크로스 레이싱</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#111;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Segoe UI',sans-serif}
+  body{background:#111;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Segoe UI',sans-serif;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+  #racePad{display:none;position:fixed;bottom:10px;left:0;right:0;height:120px;z-index:1000;touch-action:none;pointer-events:none}
+  #racePad .rp-btn{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:bold;color:#fff;border:2px solid rgba(255,255,255,0.3);touch-action:none;user-select:none}
+  #racePad .rp-btn:active{filter:brightness(1.5)}
+  #rp-left{width:60px;height:60px;left:15px;bottom:25px;background:rgba(40,40,60,0.7)}
+  #rp-right{width:60px;height:60px;left:90px;bottom:25px;background:rgba(40,40,60,0.7)}
+  #rp-gas{width:70px;height:70px;right:15px;bottom:40px;background:rgba(50,180,80,0.7);border-color:rgba(100,255,100,0.4);font-size:13px}
+  #rp-brake{width:60px;height:60px;right:100px;bottom:30px;background:rgba(220,50,50,0.7);border-color:rgba(255,100,100,0.4);font-size:12px}
   #gameContainer{position:relative;width:100vw;height:100vh}
   canvas{display:block;width:100vw;height:100vh}
   .screen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;border-radius:8px;z-index:10}
@@ -657,6 +664,27 @@ menuIdx=1;
 hlMenu();
 looping=true;
 requestAnimationFrame(gameLoop);
+
+// ===== 모바일 레이싱 터치 컨트롤 =====
+if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+  document.getElementById('racePad').style.display='block';
+  const bmap={'rp-left':'ArrowLeft','rp-right':'ArrowRight','rp-gas':'ArrowUp','rp-brake':'ArrowDown'};
+  Object.entries(bmap).forEach(([id,k])=>{
+    const el=document.getElementById(id);
+    el.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;},{passive:false});
+    el.addEventListener('pointerup',e=>{e.preventDefault();keys[k]=false;},{passive:false});
+    el.addEventListener('pointercancel',()=>{keys[k]=false;});
+    el.addEventListener('pointerleave',()=>{keys[k]=false;});
+  });
+  document.addEventListener('touchmove',e=>{if(e.target.closest('#racePad'))e.preventDefault();},{passive:false});
+}
 </script>
+
+<div id="racePad">
+  <div class="rp-btn" id="rp-left">◀</div>
+  <div class="rp-btn" id="rp-right">▶</div>
+  <div class="rp-btn" id="rp-gas">가속</div>
+  <div class="rp-btn" id="rp-brake">감속</div>
+</div>
 </body>
 </html>

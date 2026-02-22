@@ -21,3 +21,5 @@ icons/
 
 # Claude config
 .claude/
+
+.vercel

@@ -433,6 +433,10 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       <span class="big-icon">🎮</span>
       <h2 id="welcomeTitle">게임을 선택하세요</h2>
       <p>좌측 메뉴에서 게임을 클릭하면 여기에서 바로 플레이할 수 있습니다. 각 게임을 선택해서 고도화 작업을 진행하세요!</p>
+      <div id="welcomeLogin" style="margin-top:8px">
+        <button class="login-btn google" onclick="googleLogin()" style="padding:10px 24px;font-size:14px;border-radius:8px">G Google로 로그인</button>
+        <p style="margin-top:8px;font-size:11px;color:var(--text-dim)">로그인하면 게임 점수를 저장할 수 있어요</p>
+      </div>
       <div class="shortcut-hint">
         <div class="key"><kbd>Esc</kbd> 사이드바 토글</div>
         <div class="key"><kbd>F11</kbd> 전체화면</div>
@@ -495,6 +499,7 @@ function updateLoginUI(user) {
   const topbarLogin = document.getElementById('topbarLogin');
   const sidebarLogin = document.getElementById('sidebarLogin');
   const welcomeTitle = document.getElementById('welcomeTitle');
+  const welcomeLogin = document.getElementById('welcomeLogin');
 
   if (user) {
     const photo = user.photoURL || '';
@@ -515,10 +520,12 @@ function updateLoginUI(user) {
       </div>`;
 
     welcomeTitle.textContent = `${name}님, 환영합니다!`;
+    welcomeLogin.style.display = 'none';
   } else {
     topbarLogin.innerHTML = `<button class="login-btn google" onclick="googleLogin()">G 로그인</button>`;
     sidebarLogin.innerHTML = `<button class="login-btn google" onclick="googleLogin()">G 로그인</button>`;
     welcomeTitle.textContent = '게임을 선택하세요';
+    welcomeLogin.style.display = '';
   }
 }
 

@@ -2,12 +2,15 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Balatro - 포커 로그라이크</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
-body{background:#1a1a2e;font-family:'Noto Sans KR',sans-serif;overflow:hidden;user-select:none;display:flex;justify-content:center;align-items:center;height:100vh;color:#fff}
+body{background:#1a1a2e;font-family:'Noto Sans KR',sans-serif;overflow:hidden;user-select:none;display:flex;justify-content:center;align-items:center;height:100vh;color:#fff;overscroll-behavior:none;-webkit-touch-callout:none}
 #game{width:1200px;height:800px;position:relative;background:linear-gradient(135deg,#16213e 0%,#0f3460 50%,#1a1a2e 100%);border-radius:20px;overflow:hidden;box-shadow:0 0 60px rgba(0,100,255,0.3)}
+@media(max-width:1220px){#game{width:100vw;height:auto;aspect-ratio:1200/800;border-radius:0;transform-origin:top center}body{align-items:flex-start;overflow-y:auto;height:auto;min-height:100vh}}
+@media(max-width:768px){.card{width:50px!important;height:72px!important;font-size:11px!important;margin:0 1px!important}.action-btn{padding:8px 14px!important;font-size:12px!important;min-width:auto!important}}
 
 /* 배경 패턴 */
 #game::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-conic-gradient(rgba(255,255,255,0.02) 0% 25%,transparent 0% 50%) 0 0/60px 60px;pointer-events:none;z-index:0}

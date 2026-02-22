@@ -6,7 +6,7 @@
 <title>🏰 타워 디펜스 - 왕국을 지켜라!</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#1a1a2e;font-family:'Segoe UI',sans-serif;overflow:hidden;height:100vh;display:flex;justify-content:center;align-items:center;user-select:none}
+body{background:#1a1a2e;font-family:'Segoe UI',sans-serif;overflow:hidden;height:100vh;display:flex;justify-content:center;align-items:center;user-select:none;touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none}
 
 /* 메뉴 */
 #menu{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a0a1a,#1a1a3e,#0e0e2e);z-index:100}
@@ -1656,6 +1656,25 @@ cv.addEventListener('mousemove', (e) => {
   cv.style.cursor = selectedTower !== null ? 'crosshair' : 'pointer';
 });
 
+// ── 모바일 터치 지원 ──
+cv.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+cv.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = cv.getBoundingClientRect();
+  mouseX = (touch.clientX - rect.left) * (W / rect.width);
+  mouseY = (touch.clientY - rect.top) * (H / rect.height);
+}, { passive: false });
+cv.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  const touch = e.changedTouches[0];
+  const rect = cv.getBoundingClientRect();
+  mouseX = (touch.clientX - rect.left) * (W / rect.width);
+  mouseY = (touch.clientY - rect.top) * (H / rect.height);
+  // Simulate click
+  cv.dispatchEvent(new MouseEvent('click', { clientX: touch.clientX, clientY: touch.clientY, bubbles: true }));
+}, { passive: false });
+
 // ── 보스 웨이브 경고 ──
 let bossWarningTimer = 0;
 function drawBossWarning() {
@@ -1719,7 +1738,7 @@ function gameLoop() {
 function resizeCanvas() {
   const maxW = window.innerWidth;
   const maxH = window.innerHeight - 0;
-  const scale = Math.min(maxW / W, maxH / H, 1);
+  const scale = Math.min(maxW / W, maxH / H);
   cv.style.width = (W * scale) + 'px';
   cv.style.height = (H * scale) + 'px';
   cv.style.left = ((maxW - W*scale)/2) + 'px';
