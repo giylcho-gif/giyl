@@ -143,6 +143,52 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
   font-family:monospace;
 }
 
+/* Login Area */
+.login-area{
+  display:flex;align-items:center;gap:8px;
+  margin-left:auto;padding-left:12px;
+}
+.login-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 14px;font-size:12px;border-radius:6px;
+  border:1px solid var(--border);background:transparent;
+  color:var(--text);cursor:pointer;transition:all .15s;
+  font-family:inherit;white-space:nowrap;
+}
+.login-btn:hover{background:var(--hover);color:#fff}
+.login-btn.google{
+  background:#4285f4;border-color:#4285f4;color:#fff;
+}
+.login-btn.google:hover{background:#3367d6}
+.user-profile{
+  display:flex;align-items:center;gap:8px;
+}
+.user-avatar{
+  width:28px;height:28px;border-radius:50%;
+  border:2px solid var(--accent);object-fit:cover;
+}
+.user-name{
+  font-size:12px;color:var(--text);font-weight:600;
+  max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.logout-btn{
+  padding:4px 10px;font-size:11px;border-radius:5px;
+  border:1px solid var(--border);background:transparent;
+  color:var(--text-dim);cursor:pointer;transition:all .15s;
+  font-family:inherit;
+}
+.logout-btn:hover{background:#da3633;border-color:#da3633;color:#fff}
+
+/* Sidebar Login */
+.sidebar-login{
+  padding:10px 18px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.sidebar-login .user-avatar{width:24px;height:24px}
+.sidebar-login .user-name{font-size:11px;flex:1;min-width:0}
+.sidebar-login .login-btn{width:100%;justify-content:center;padding:8px;font-size:12px}
+.sidebar-login .logout-btn{font-size:10px;padding:3px 8px}
+
 /* Fullscreen */
 .fullscreen .sidebar{margin-left:calc(var(--sidebar-w) * -1)}
 .fullscreen .topbar{display:none}
@@ -193,6 +239,12 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
   /* Sidebar footer hide keyboard hints on mobile */
   .sidebar-footer kbd { display: none; }
   .sidebar-footer { font-size: 0; }
+
+  /* Login area mobile */
+  .user-name { display: none; }
+  .login-area { padding-left: 4px; }
+  .login-btn { padding: 4px 10px; font-size: 11px; }
+  .logout-btn { padding: 3px 8px; font-size: 10px; }
 }
 </style>
 </head>
@@ -343,6 +395,11 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       </a>
     </div>
 
+    <!-- Sidebar Login -->
+    <div class="sidebar-login" id="sidebarLogin">
+      <button class="login-btn google" onclick="googleLogin()">G 로그인</button>
+    </div>
+
     <div class="sidebar-footer">
       <kbd>F11</kbd> 전체화면 · <kbd>Esc</kbd> 사이드바 토글
     </div>
@@ -360,6 +417,10 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       <span class="game-title" id="currentGameTitle"></span>
       <span class="sep">·</span>
       <span class="game-file" id="currentGameFile"></span>
+      <!-- Login Area -->
+      <div class="login-area" id="topbarLogin">
+        <button class="login-btn google" onclick="googleLogin()">G 로그인</button>
+      </div>
       <div class="actions">
         <button onclick="reloadGame()" title="게임 새로고침">↻ 새로고침</button>
         <button onclick="openInNewTab()" title="새 탭에서 열기">↗ 새 탭</button>
@@ -370,7 +431,7 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
     <!-- Welcome -->
     <div class="welcome" id="welcome">
       <span class="big-icon">🎮</span>
-      <h2>게임을 선택하세요</h2>
+      <h2 id="welcomeTitle">게임을 선택하세요</h2>
       <p>좌측 메뉴에서 게임을 클릭하면 여기에서 바로 플레이할 수 있습니다. 각 게임을 선택해서 고도화 작업을 진행하세요!</p>
       <div class="shortcut-hint">
         <div class="key"><kbd>Esc</kbd> 사이드바 토글</div>
@@ -384,6 +445,85 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
     </div>
   </div>
 </div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCkjCp8JsQuBV9QV8qBYz0vUA5wNX2yHIo",
+  authDomain: "gen-lang-client-0401250587.firebaseapp.com",
+  projectId: "gen-lang-client-0401250587",
+  storageBucket: "gen-lang-client-0401250587.firebasestorage.app",
+  messagingSenderId: "140509769436",
+  appId: "1:140509769436:web:153bf7b6e480ad68760e19"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+// 전역으로 노출 (게임 iframe에서 접근 가능하도록)
+window.giylAuth = auth;
+window.giylUser = null;
+
+window.googleLogin = async function() {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    if (error.code === 'auth/popup-closed-by-user') return;
+    if (error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
+      alert('Firebase 설정이 필요합니다.\nindex.html의 firebaseConfig를 업데이트해주세요.');
+      return;
+    }
+    console.error('로그인 오류:', error);
+    alert('로그인 중 오류가 발생했습니다: ' + error.message);
+  }
+};
+
+window.googleLogout = async function() {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error('로그아웃 오류:', error);
+  }
+};
+
+function updateLoginUI(user) {
+  window.giylUser = user;
+  const topbarLogin = document.getElementById('topbarLogin');
+  const sidebarLogin = document.getElementById('sidebarLogin');
+  const welcomeTitle = document.getElementById('welcomeTitle');
+
+  if (user) {
+    const photo = user.photoURL || '';
+    const name = user.displayName || user.email || '사용자';
+
+    topbarLogin.innerHTML = `
+      <div class="user-profile">
+        ${photo ? `<img class="user-avatar" src="${photo}" alt="" referrerpolicy="no-referrer">` : ''}
+        <span class="user-name">${name}</span>
+        <button class="logout-btn" onclick="googleLogout()">로그아웃</button>
+      </div>`;
+
+    sidebarLogin.innerHTML = `
+      <div class="user-profile" style="width:100%">
+        ${photo ? `<img class="user-avatar" src="${photo}" alt="" referrerpolicy="no-referrer">` : ''}
+        <span class="user-name">${name}</span>
+        <button class="logout-btn" onclick="googleLogout()">로그아웃</button>
+      </div>`;
+
+    welcomeTitle.textContent = `${name}님, 환영합니다!`;
+  } else {
+    topbarLogin.innerHTML = `<button class="login-btn google" onclick="googleLogin()">G 로그인</button>`;
+    sidebarLogin.innerHTML = `<button class="login-btn google" onclick="googleLogin()">G 로그인</button>`;
+    welcomeTitle.textContent = '게임을 선택하세요';
+  }
+}
+
+onAuthStateChanged(auth, updateLoginUI);
+</script>
 
 <script>
 const sidebar = document.getElementById('sidebar');
