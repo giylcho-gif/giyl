@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alpine Rush - Downhill Snowboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; }
+#ui-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+}
+#score-panel {
+  position: absolute; top: 20px; left: 20px;
+  color: #fff; font-size: 18px; text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+}
+#score-panel div { margin-bottom: 8px; }
+#score-panel .label { font-size: 12px; opacity: 0.7; text-transform: uppercase; letter-spacing: 2px; }
+#score-panel .value { font-size: 28px; font-weight: bold; }
+#speed-bar-container {
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  width: 200px; height: 8px; background: rgba(255,255,255,0.2);
+  border-radius: 4px; overflow: hidden;
+}
+#speed-bar {
+  height: 100%; width: 0%; border-radius: 4px;
+  transition: width 0.1s, background 0.3s;
+}
+#combo-display {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #FFD700; font-size: 48px; font-weight: bold;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.4);
+  opacity: 0; transition: opacity 0.3s;
+  pointer-events: none;
+}
+#trick-display {
+  position: absolute; top: 60%; left: 50%; transform: translateX(-50%);
+  color: #00ffff; font-size: 28px; font-weight: bold;
+  text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+  opacity: 0; pointer-events: none;
+}
+#start-screen, #game-over-screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 100; pointer-events: all;
+}
+#start-screen {
+  background: linear-gradient(180deg, #1a1a3e 0%, #2d1b69 30%, #4a2c8a 60%, #1a1a3e 100%);
+}
+#game-over-screen {
+  background: rgba(0,0,0,0.85);
+  display: none;
+}
+.title {
+  font-size: 72px; font-weight: 900; color: #fff;
+  text-shadow: 0 0 30px rgba(100, 200, 255, 0.8), 0 4px 8px rgba(0,0,0,0.5);
+  margin-bottom: 10px; letter-spacing: 4px;
+}
+.subtitle { font-size: 18px; color: rgba(255,255,255,0.6); margin-bottom: 50px; letter-spacing: 8px; }
+.btn {
+  padding: 16px 48px; font-size: 20px; font-weight: bold;
+  border: 2px solid rgba(255,255,255,0.3); border-radius: 50px;
+  background: linear-gradient(135deg, rgba(100,200,255,0.3), rgba(100,100,255,0.3));
+  color: #fff; cursor: pointer; letter-spacing: 3px;
+  transition: all 0.3s; pointer-events: all; text-transform: uppercase;
+}
+.btn:hover {
+  background: linear-gradient(135deg, rgba(100,200,255,0.6), rgba(100,100,255,0.6));
+  border-color: rgba(255,255,255,0.6);
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(100, 200, 255, 0.4);
+}
+.controls-info {
+  margin-top: 40px; color: rgba(255,255,255,0.5); font-size: 14px;
+  text-align: center; line-height: 2;
+}
+.controls-info span { color: rgba(255,255,255,0.8); font-weight: bold; }
+#final-score { font-size: 64px; font-weight: 900; color: #FFD700; margin: 20px 0; }
+#final-distance { font-size: 24px; color: rgba(255,255,255,0.7); margin-bottom: 30px; }
+.game-over-title { font-size: 48px; color: #fff; font-weight: 900; margin-bottom: 10px; }
+#minimap {
+  position: absolute; top: 20px; right: 20px;
+  width: 60px; height: 200px;
+  background: rgba(0,0,0,0.3); border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+  overflow: hidden;
+}
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui-overlay">
+  <div id="score-panel">
+    <div><div class="label">Score</div><div class="value" id="score">0</div></div>
+    <div><div class="label">Distance</div><div class="value" id="distance">0m</div></div>
+    <div><div class="label">Speed</div><div class="value" id="speed">0</div></div>
+  </div>
+  <div id="speed-bar-container"><div id="speed-bar"></div></div>
+  <div id="combo-display"></div>
+  <div id="trick-display"></div>
+  <div id="minimap"><canvas id="minimapCanvas" width="60" height="200"></canvas></div>
+</div>
+
+<div id="start-screen">
+  <div class="title">ALPINE RUSH</div>
+  <div class="subtitle">DOWNHILL SNOWBOARD</div>
+  <button class="btn" onclick="startGame()">START RIDE</button>
+  <div class="controls-info">
+    <span>← →</span> or <span>A D</span> : Steer<br>
+    <span>↑</span> or <span>W</span> : Tuck (Speed Up)<br>
+    <span>↓</span> or <span>S</span> : Brake<br>
+    <span>SPACE</span> : Jump / Trick
+  </div>
+</div>
+
+<div id="game-over-screen">
+  <div class="game-over-title">WIPEOUT!</div>
+  <div id="final-score">0</div>
+  <div id="final-distance">0m</div>
+  <button class="btn" onclick="restartGame()">RIDE AGAIN</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const mctx = minimapCanvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Game state
+let gameRunning = false;
+let gameTime = 0;
+let score = 0;
+let distance = 0;
+let combo = 0;
+let comboTimer = 0;
+let trickText = '';
+let trickOpacity = 0;
+let comboOpacity = 0;
+let screenShake = 0;
+let particles = [];
+let snowParticles = [];
+let trailPoints = [];
+
+// Player
+const player = {
+  x: 0, y: 0, z: 0,
+  vx: 0, vy: 0, vz: 0,
+  speed: 0,
+  targetSpeed: 4,
+  maxSpeed: 14,
+  angle: 0,
+  tilt: 0,
+  isJumping: false,
+  jumpHeight: 0,
+  jumpVel: 0,
+  grounded: true,
+  tricks: 0,
+  spinAngle: 0,
+  flipAngle: 0,
+  tucking: false,
+  braking: false,
+  alive: true,
+  invincible: 0,
+  boardRotation: 0
+};
+
+// Camera
+const camera = {
+  x: 0, y: 0, z: 0,
+  targetX: 0, targetY: 0,
+  shake: 0
+};
+
+// Terrain
+let terrainSegments = [];
+const SEGMENT_LENGTH = 15;
+const ROAD_WIDTH = 30;
+const VISIBLE_SEGMENTS = 80;
+let lastSegmentZ = 0;
+
+// Objects
+let trees = [];
+let rocks = [];
+let ramps = [];
+let coins = [];
+let flags = [];
+
+// Input
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Touch controls
+let touchLeft = false, touchRight = false, touchUp = false, touchDown = false, touchJump = false;
+
+function generateSegment(z) {
+  const progress = z / 500;
+  const curvature = Math.sin(z * 0.003) * 12 + Math.sin(z * 0.0017) * 8 + Math.cos(z * 0.0007) * 15;
+  const slopeVariation = Math.sin(z * 0.005) * 3 + Math.cos(z * 0.002) * 2;
+  const width = ROAD_WIDTH + Math.sin(z * 0.004) * 8;
+
+  return {
+    z: z,
+    x: curvature,
+    y: slopeVariation,
+    width: width,
+    snow: 0.5 + Math.sin(z * 0.01) * 0.3 + Math.random() * 0.2,
+    ice: Math.random() < 0.05 ? 1 : 0
+  };
+}
+
+function generateObjects(segment, idx) {
+  const z = segment.z;
+  const cx = segment.x;
+
+  // Trees - dense forest on sides
+  if (Math.random() < 0.4) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const offset = segment.width / 2 + 5 + Math.random() * 30;
+    trees.push({
+      x: cx + side * offset,
+      z: z + Math.random() * SEGMENT_LENGTH,
+      height: 8 + Math.random() * 12,
+      width: 3 + Math.random() * 3,
+      type: Math.floor(Math.random() * 3),
+      snow: 0.3 + Math.random() * 0.5
+    });
+  }
+
+  // Extra background trees
+  if (Math.random() < 0.6) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const offset = segment.width / 2 + 25 + Math.random() * 50;
+    trees.push({
+      x: cx + side * offset,
+      z: z + Math.random() * SEGMENT_LENGTH,
+      height: 6 + Math.random() * 15,
+      width: 2 + Math.random() * 4,
+      type: Math.floor(Math.random() * 3),
+      snow: 0.4 + Math.random() * 0.4
+    });
+  }
+
+  // Rocks on the slope
+  if (Math.random() < 0.12) {
+    const rx = cx + (Math.random() - 0.5) * segment.width * 0.7;
+    rocks.push({
+      x: rx,
+      z: z + Math.random() * SEGMENT_LENGTH,
+      size: 1.5 + Math.random() * 2.5,
+      type: Math.floor(Math.random() * 3)
+    });
+  }
+
+  // Ramps
+  if (Math.random() < 0.06 && z > 100) {
+    ramps.push({
+      x: cx + (Math.random() - 0.5) * segment.width * 0.4,
+      z: z,
+      width: 6 + Math.random() * 4,
+      height: 2 + Math.random() * 2
+    });
+  }
+
+  // Coins
+  if (Math.random() < 0.15) {
+    const coinCount = 3 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < coinCount; i++) {
+      coins.push({
+        x: cx + (Math.random() - 0.5) * segment.width * 0.5,
+        z: z + i * 4,
+        collected: false,
+        bobOffset: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  // Slalom flags
+  if (Math.random() < 0.08) {
+    flags.push({
+      x: cx + (Math.random() - 0.5) * segment.width * 0.6,
+      z: z,
+      passed: false,
+      side: Math.random() < 0.5 ? -1 : 1
+    });
+  }
+}
+
+function initTerrain() {
+  terrainSegments = [];
+  trees = []; rocks = []; ramps = []; coins = []; flags = [];
+  lastSegmentZ = 0;
+
+  for (let i = 0; i < VISIBLE_SEGMENTS + 40; i++) {
+    const z = i * SEGMENT_LENGTH;
+    const seg = generateSegment(z);
+    terrainSegments.push(seg);
+    generateObjects(seg, i);
+    lastSegmentZ = z;
+  }
+}
+
+function extendTerrain() {
+  while (lastSegmentZ - player.z < VISIBLE_SEGMENTS * SEGMENT_LENGTH) {
+    lastSegmentZ += SEGMENT_LENGTH;
+    const seg = generateSegment(lastSegmentZ);
+    terrainSegments.push(seg);
+    generateObjects(seg, terrainSegments.length - 1);
+  }
+
+  // Clean up old segments
+  while (terrainSegments.length > 0 && terrainSegments[0].z < player.z - 100) {
+    terrainSegments.shift();
+  }
+  trees = trees.filter(t => t.z > player.z - 50);
+  rocks = rocks.filter(r => r.z > player.z - 50);
+  ramps = ramps.filter(r => r.z > player.z - 50);
+  coins = coins.filter(c => c.z > player.z - 50);
+  flags = flags.filter(f => f.z > player.z - 50);
+}
+
+// 3D projection
+function project(worldX, worldY, worldZ) {
+  const relX = worldX - camera.x;
+  const relY = worldY - camera.y;
+  const relZ = worldZ - camera.z;
+
+  if (relZ <= 1) return null;
+
+  const fov = 160;
+  const scale = fov / relZ;
+  const sx = W / 2 + relX * scale + (camera.shake ? (Math.random() - 0.5) * camera.shake : 0);
+  const sy = H / 2.5 - relY * scale + relZ * 0.8 + (camera.shake ? (Math.random() - 0.5) * camera.shake : 0);
+
+  return { x: sx, y: sy, scale: scale };
+}
+
+function getSegmentAt(z) {
+  for (let i = 0; i < terrainSegments.length - 1; i++) {
+    if (terrainSegments[i].z <= z && terrainSegments[i + 1].z > z) {
+      const t = (z - terrainSegments[i].z) / SEGMENT_LENGTH;
+      const s1 = terrainSegments[i];
+      const s2 = terrainSegments[i + 1];
+      return {
+        x: s1.x + (s2.x - s1.x) * t,
+        y: s1.y + (s2.y - s1.y) * t,
+        width: s1.width + (s2.width - s1.width) * t,
+        snow: s1.snow,
+        ice: s1.ice
+      };
+    }
+  }
+  return { x: 0, y: 0, width: ROAD_WIDTH, snow: 0.5, ice: 0 };
+}
+
+function spawnParticle(x, y, z, type) {
+  particles.push({
+    x, y, z,
+    vx: (Math.random() - 0.5) * 3,
+    vy: Math.random() * 4 + 2,
+    vz: (Math.random() - 0.5) * 2,
+    life: 1,
+    decay: 0.02 + Math.random() * 0.03,
+    size: type === 'snow' ? 2 + Math.random() * 3 : 1 + Math.random() * 2,
+    type: type
+  });
+}
+
+function spawnSnowSpray() {
+  if (!player.grounded || player.speed < 2) return;
+  const count = Math.floor(player.speed / 3);
+  for (let i = 0; i < count; i++) {
+    spawnParticle(
+      player.x + (Math.random() - 0.5) * 2,
+      player.jumpHeight + 0.5,
+      player.z - 1,
+      'snow'
+    );
+  }
+}
+
+function initSnowfall() {
+  snowParticles = [];
+  for (let i = 0; i < 200; i++) {
+    snowParticles.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      size: 1 + Math.random() * 3,
+      speed: 0.5 + Math.random() * 1.5,
+      wind: (Math.random() - 0.5) * 0.5,
+      opacity: 0.3 + Math.random() * 0.5
+    });
+  }
+}
+
+function updateSnowfall() {
+  for (const s of snowParticles) {
+    s.y += s.speed;
+    s.x += s.wind + player.vx * 0.1;
+    if (s.y > H) { s.y = -5; s.x = Math.random() * W; }
+    if (s.x > W) s.x = 0;
+    if (s.x < 0) s.x = W;
+  }
+}
+
+function drawSnowfall() {
+  for (const s of snowParticles) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`;
+    ctx.fill();
+  }
+}
+
+function updatePlayer(dt) {
+  if (!player.alive) return;
+
+  const seg = getSegmentAt(player.z);
+  const steerSpeed = player.grounded ? 0.4 : 0.15;
+
+  // Steering
+  if (keys['ArrowLeft'] || keys['KeyA'] || touchLeft) {
+    player.vx -= steerSpeed * dt * 60;
+    player.tilt = Math.max(player.tilt - 0.05, -0.4);
+  } else if (keys['ArrowRight'] || keys['KeyD'] || touchRight) {
+    player.vx += steerSpeed * dt * 60;
+    player.tilt = Math.min(player.tilt + 0.05, 0.4);
+  } else {
+    player.tilt *= 0.9;
+  }
+
+  // Speed control
+  if (keys['ArrowUp'] || keys['KeyW'] || touchUp) {
+    player.tucking = true;
+    player.targetSpeed = Math.min(player.targetSpeed + 0.08 * dt * 60, player.maxSpeed);
+  } else if (keys['ArrowDown'] || keys['KeyS'] || touchDown) {
+    player.braking = true;
+    player.tucking = false;
+    player.targetSpeed = Math.max(player.targetSpeed - 0.4 * dt * 60, 2);
+  } else {
+    player.tucking = false;
+    player.braking = false;
+    // Gradual speed on slope
+    const slopeAccel = 0.025;
+    player.targetSpeed = Math.min(player.targetSpeed + slopeAccel * dt * 60, 8);
+  }
+
+  // Jump
+  if ((keys['Space'] || touchJump) && player.grounded && !player.isJumping) {
+    player.isJumping = true;
+    player.grounded = false;
+    player.jumpVel = 8 + player.speed * 0.3;
+    keys['Space'] = false;
+    touchJump = false;
+  }
+
+  // Ramp detection
+  for (const ramp of ramps) {
+    if (!player.isJumping && Math.abs(player.z - ramp.z) < 5 && Math.abs(player.x - ramp.x) < ramp.width / 2) {
+      player.isJumping = true;
+      player.grounded = false;
+      player.jumpVel = 10 + player.speed * 0.4;
+    }
+  }
+
+  // Jump physics
+  if (player.isJumping) {
+    player.jumpHeight += player.jumpVel * dt;
+    player.jumpVel -= 25 * dt;
+
+    // Tricks in air
+    if (keys['Space'] || touchJump) {
+      player.spinAngle += 5 * dt;
+      player.tricks++;
+    }
+    player.flipAngle += player.speed * 0.02;
+
+    if (player.jumpHeight <= 0) {
+      player.jumpHeight = 0;
+      player.isJumping = false;
+      player.grounded = true;
+      player.jumpVel = 0;
+
+      if (player.tricks > 0) {
+        const trickScore = player.tricks * 100 * (1 + combo * 0.5);
+        score += Math.floor(trickScore);
+        combo++;
+        comboTimer = 3;
+        comboOpacity = 1;
+        showTrick(player.tricks);
+        player.tricks = 0;
+      }
+      player.spinAngle = 0;
+      player.flipAngle = 0;
+
+      // Landing particles
+      for (let i = 0; i < 20; i++) {
+        spawnParticle(player.x, 0, player.z, 'snow');
+      }
+      camera.shake = 5;
+    }
+  }
+
+  // Apply speed
+  player.speed += (player.targetSpeed - player.speed) * 0.05 * dt * 60;
+
+  // Ice effect
+  if (seg.ice) {
+    player.vx *= 1.01;
+    player.speed *= 1.02;
+  }
+
+  // Friction
+  player.vx *= Math.pow(0.95, dt * 60);
+
+  // Move player
+  player.x += player.vx * dt * 60;
+  player.z += player.speed * dt * 60;
+
+  // Track curve following
+  const targetX = seg.x;
+  const diff = targetX - player.x;
+  player.x += diff * 0.01 * dt * 60;
+
+  // Bounds check - off piste
+  const halfWidth = seg.width / 2;
+  const relX = player.x - seg.x;
+  if (Math.abs(relX) > halfWidth + 5) {
+    player.speed *= 0.98;
+  }
+
+  // Collision with trees
+  for (const tree of trees) {
+    const dx = player.x - tree.x;
+    const dz = player.z - tree.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < tree.width * 0.6 && player.jumpHeight < tree.height * 0.3 && player.invincible <= 0) {
+      crashPlayer();
+      return;
+    }
+  }
+
+  // Collision with rocks
+  for (const rock of rocks) {
+    const dx = player.x - rock.x;
+    const dz = player.z - rock.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < rock.size * 0.8 && player.jumpHeight < rock.size * 0.5 && player.invincible <= 0) {
+      if (player.speed > 10) {
+        crashPlayer();
+        return;
+      } else {
+        player.speed *= 0.3;
+        player.vx = (dx / dist) * 3;
+        camera.shake = 8;
+        for (let i = 0; i < 15; i++) spawnParticle(rock.x, 0, rock.z, 'spark');
+      }
+    }
+  }
+
+  // Coin collection
+  for (const coin of coins) {
+    if (coin.collected) continue;
+    const dx = player.x - coin.x;
+    const dz = player.z - coin.z;
+    if (Math.sqrt(dx * dx + dz * dz) < 3) {
+      coin.collected = true;
+      score += 50 * (1 + combo * 0.3);
+      for (let i = 0; i < 8; i++) spawnParticle(coin.x, 2, coin.z, 'coin');
+    }
+  }
+
+  // Flags
+  for (const flag of flags) {
+    if (flag.passed) continue;
+    if (player.z > flag.z && Math.abs(player.x - flag.x) < 5) {
+      flag.passed = true;
+      score += 200;
+      combo++;
+      comboTimer = 3;
+      comboOpacity = 1;
+    }
+  }
+
+  // Update distance/score
+  distance = Math.floor(player.z);
+  score += Math.floor(player.speed * 0.5 * dt * 60);
+
+  // Combo decay
+  if (comboTimer > 0) {
+    comboTimer -= dt;
+    if (comboTimer <= 0) {
+      combo = 0;
+      comboOpacity = 0;
+    }
+  }
+
+  // Invincibility decay
+  if (player.invincible > 0) player.invincible -= dt;
+
+  // Snow spray
+  if (gameTime % 3 < 1) spawnSnowSpray();
+
+  // Trail
+  if (player.grounded) {
+    trailPoints.push({ x: player.x, z: player.z, life: 1 });
+  }
+  trailPoints = trailPoints.filter(t => {
+    t.life -= 0.005;
+    return t.life > 0 && t.z > player.z - 80;
+  });
+
+  // Board visual rotation
+  player.boardRotation += player.speed * 0.01;
+}
+
+function crashPlayer() {
+  player.alive = false;
+  camera.shake = 20;
+
+  for (let i = 0; i < 50; i++) {
+    spawnParticle(player.x, player.jumpHeight + 1, player.z, 'crash');
+  }
+
+  setTimeout(() => {
+    document.getElementById('game-over-screen').style.display = 'flex';
+    document.getElementById('final-score').textContent = score.toLocaleString();
+    document.getElementById('final-distance').textContent = `${distance}m ridden`;
+  }, 1000);
+}
+
+function showTrick(count) {
+  const tricks = ['GRAB!', 'SPIN!', 'FLIP!', 'RODEO!', '720°!', 'INSANE!'];
+  const idx = Math.min(count - 1, tricks.length - 1);
+  trickText = tricks[idx];
+  trickOpacity = 1;
+
+  const el = document.getElementById('trick-display');
+  el.textContent = trickText;
+  el.style.opacity = 1;
+  setTimeout(() => { el.style.opacity = 0; }, 1500);
+}
+
+function updateCamera(dt) {
+  const lookAhead = 20 + player.speed * 1.5;
+  const seg = getSegmentAt(player.z + lookAhead);
+
+  camera.targetX = player.x * 0.7 + seg.x * 0.3;
+  camera.x += (camera.targetX - camera.x) * 0.03 * dt * 60;
+  camera.y = 8 + player.jumpHeight * 0.5 + (player.tucking ? -1 : 0);
+  camera.z = player.z - 12;
+
+  if (camera.shake > 0) {
+    camera.shake *= 0.9;
+    if (camera.shake < 0.1) camera.shake = 0;
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.z += p.vz * dt;
+    p.vy -= 15 * dt;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// Rendering
+function drawSky() {
+  const timeOfDay = 0.5 + Math.sin(gameTime * 0.01) * 0.2;
+  const gradient = ctx.createLinearGradient(0, 0, 0, H * 0.5);
+
+  gradient.addColorStop(0, `rgb(${40 + timeOfDay * 30}, ${60 + timeOfDay * 40}, ${120 + timeOfDay * 60})`);
+  gradient.addColorStop(0.4, `rgb(${80 + timeOfDay * 50}, ${120 + timeOfDay * 60}, ${180 + timeOfDay * 40})`);
+  gradient.addColorStop(0.7, `rgb(${160 + timeOfDay * 40}, ${180 + timeOfDay * 30}, ${220 + timeOfDay * 20})`);
+  gradient.addColorStop(1, `rgb(${200 + timeOfDay * 20}, ${210 + timeOfDay * 15}, ${230 + timeOfDay * 10})`);
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, W, H);
+
+  // Sun/Moon glow
+  const sunX = W * 0.75;
+  const sunY = H * 0.12;
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 120);
+  sunGrad.addColorStop(0, 'rgba(255, 250, 230, 0.8)');
+  sunGrad.addColorStop(0.3, 'rgba(255, 230, 180, 0.3)');
+  sunGrad.addColorStop(1, 'rgba(255, 200, 150, 0)');
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(sunX - 120, sunY - 120, 240, 240);
+
+  // Mountains background
+  drawMountains();
+}
+
+function drawMountains() {
+  const mountainColors = [
+    'rgba(100, 120, 160, 0.6)',
+    'rgba(120, 140, 180, 0.5)',
+    'rgba(140, 160, 200, 0.4)'
+  ];
+
+  for (let layer = 0; layer < 3; layer++) {
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.4);
+
+    const offset = (player.z * (0.02 + layer * 0.01)) % (W * 2);
+    const scale = 80 + layer * 40;
+    const baseY = H * (0.25 + layer * 0.05);
+
+    for (let x = -100; x <= W + 100; x += 3) {
+      const nx = (x + offset) * 0.003 * (1 + layer * 0.5);
+      const h = Math.sin(nx) * scale + Math.sin(nx * 2.3) * scale * 0.4 + Math.cos(nx * 0.7) * scale * 0.3;
+      ctx.lineTo(x, baseY - h);
+    }
+    ctx.lineTo(W + 100, H * 0.5);
+    ctx.lineTo(-100, H * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = mountainColors[layer];
+    ctx.fill();
+
+    // Snow caps
+    ctx.beginPath();
+    for (let x = -100; x <= W + 100; x += 3) {
+      const nx = (x + offset) * 0.003 * (1 + layer * 0.5);
+      const h = Math.sin(nx) * scale + Math.sin(nx * 2.3) * scale * 0.4 + Math.cos(nx * 0.7) * scale * 0.3;
+      const peakY = baseY - h;
+      if (h > scale * 0.6) {
+        ctx.lineTo(x, peakY);
+      } else {
+        ctx.moveTo(x, peakY);
+      }
+    }
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 - layer * 0.08})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+function drawTerrain() {
+  // Draw terrain segments from far to near
+  for (let i = terrainSegments.length - 1; i >= 1; i--) {
+    const s1 = terrainSegments[i - 1];
+    const s2 = terrainSegments[i];
+
+    if (s2.z < camera.z || s1.z > camera.z + VISIBLE_SEGMENTS * SEGMENT_LENGTH) continue;
+
+    const p1L = project(s1.x - s1.width / 2, s1.y, s1.z);
+    const p1R = project(s1.x + s1.width / 2, s1.y, s1.z);
+    const p2L = project(s2.x - s2.width / 2, s2.y, s2.z);
+    const p2R = project(s2.x + s2.width / 2, s2.y, s2.z);
+
+    if (!p1L || !p1R || !p2L || !p2R) continue;
+
+    // Off-piste (sides)
+    const farL1 = project(s1.x - s1.width * 2, s1.y, s1.z);
+    const farR1 = project(s1.x + s1.width * 2, s1.y, s1.z);
+    const farL2 = project(s2.x - s2.width * 2, s2.y, s2.z);
+    const farR2 = project(s2.x + s2.width * 2, s2.y, s2.z);
+
+    if (farL1 && farL2 && farR1 && farR2) {
+      // Left side - deeper snow
+      ctx.beginPath();
+      ctx.moveTo(farL1.x, farL1.y);
+      ctx.lineTo(p1L.x, p1L.y);
+      ctx.lineTo(p2L.x, p2L.y);
+      ctx.lineTo(farL2.x, farL2.y);
+      ctx.closePath();
+      const depth1 = Math.min(1, (s1.z - camera.z) / (VISIBLE_SEGMENTS * SEGMENT_LENGTH * 0.8));
+      ctx.fillStyle = `rgb(${190 - depth1 * 40}, ${200 - depth1 * 40}, ${215 - depth1 * 30})`;
+      ctx.fill();
+
+      // Right side
+      ctx.beginPath();
+      ctx.moveTo(p1R.x, p1R.y);
+      ctx.lineTo(farR1.x, farR1.y);
+      ctx.lineTo(farR2.x, farR2.y);
+      ctx.lineTo(p2R.x, p2R.y);
+      ctx.closePath();
+      ctx.fillStyle = `rgb(${190 - depth1 * 40}, ${200 - depth1 * 40}, ${215 - depth1 * 30})`;
+      ctx.fill();
+    }
+
+    // Main piste
+    ctx.beginPath();
+    ctx.moveTo(p1L.x, p1L.y);
+    ctx.lineTo(p1R.x, p1R.y);
+    ctx.lineTo(p2R.x, p2R.y);
+    ctx.lineTo(p2L.x, p2L.y);
+    ctx.closePath();
+
+    const depth = Math.min(1, (s1.z - camera.z) / (VISIBLE_SEGMENTS * SEGMENT_LENGTH * 0.8));
+    const snowBright = s1.snow * 255;
+    const r = Math.floor(220 + snowBright * 0.1 - depth * 60);
+    const g = Math.floor(225 + snowBright * 0.08 - depth * 55);
+    const b = Math.floor(235 + snowBright * 0.05 - depth * 45);
+
+    ctx.fillStyle = s1.ice ? `rgb(${180 - depth * 40}, ${210 - depth * 40}, ${240 - depth * 30})` :
+                             `rgb(${r}, ${g}, ${b})`;
+    ctx.fill();
+
+    // Piste markings
+    if (i % 8 === 0) {
+      const pm1 = project(s1.x - 1, s1.y + 0.05, s1.z);
+      const pm2 = project(s1.x + 1, s1.y + 0.05, s1.z);
+      const pm3 = project(s2.x + 1, s2.y + 0.05, s2.z);
+      const pm4 = project(s2.x - 1, s2.y + 0.05, s2.z);
+      if (pm1 && pm2 && pm3 && pm4) {
+        ctx.beginPath();
+        ctx.moveTo(pm1.x, pm1.y);
+        ctx.lineTo(pm2.x, pm2.y);
+        ctx.lineTo(pm3.x, pm3.y);
+        ctx.lineTo(pm4.x, pm4.y);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(200, 210, 230, ${0.3 - depth * 0.3})`;
+        ctx.fill();
+      }
+    }
+
+    // Edge shadows
+    ctx.beginPath();
+    ctx.moveTo(p1L.x, p1L.y);
+    ctx.lineTo(p2L.x, p2L.y);
+    ctx.strokeStyle = `rgba(150, 160, 180, ${0.3 - depth * 0.3})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(p1R.x, p1R.y);
+    ctx.lineTo(p2R.x, p2R.y);
+    ctx.stroke();
+  }
+}
+
+function drawTrail() {
+  if (trailPoints.length < 2) return;
+  for (let i = 1; i < trailPoints.length; i++) {
+    const p1 = project(trailPoints[i - 1].x - 0.3, 0.02, trailPoints[i - 1].z);
+    const p2 = project(trailPoints[i].x + 0.3, 0.02, trailPoints[i].z);
+    if (!p1 || !p2) continue;
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.strokeStyle = `rgba(180, 190, 210, ${trailPoints[i].life * 0.4})`;
+    ctx.lineWidth = Math.max(1, p1.scale * 0.6);
+    ctx.stroke();
+  }
+}
+
+function drawTree(tree) {
+  const p = project(tree.x, 0, tree.z);
+  if (!p || p.scale < 0.1) return;
+
+  const h = tree.height * p.scale;
+  const w = tree.width * p.scale;
+
+  // Trunk
+  ctx.fillStyle = '#4a3020';
+  ctx.fillRect(p.x - w * 0.1, p.y - h * 0.3, w * 0.2, h * 0.3);
+
+  if (tree.type === 0) {
+    // Pine tree
+    for (let i = 0; i < 4; i++) {
+      const layerH = h * (0.25 + i * 0.05);
+      const layerW = w * (1.2 - i * 0.25);
+      const layerY = p.y - h * 0.3 - i * h * 0.2;
+
+      ctx.beginPath();
+      ctx.moveTo(p.x, layerY - layerH);
+      ctx.lineTo(p.x - layerW, layerY);
+      ctx.lineTo(p.x + layerW, layerY);
+      ctx.closePath();
+      ctx.fillStyle = `rgb(${30 + i * 10}, ${60 + i * 15}, ${35 + i * 10})`;
+      ctx.fill();
+
+      // Snow on branches
+      if (tree.snow > 0.3) {
+        ctx.beginPath();
+        ctx.moveTo(p.x, layerY - layerH);
+        ctx.lineTo(p.x - layerW * 0.7, layerY - layerH * 0.3);
+        ctx.lineTo(p.x + layerW * 0.7, layerY - layerH * 0.3);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(240, 245, 255, ${tree.snow * 0.7})`;
+        ctx.fill();
+      }
+    }
+  } else if (tree.type === 1) {
+    // Bushy pine
+    for (let i = 0; i < 3; i++) {
+      const rw = w * (1 - i * 0.2);
+      const cy = p.y - h * (0.4 + i * 0.25);
+      ctx.beginPath();
+      ctx.ellipse(p.x, cy, rw, h * 0.25, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `rgb(${25 + i * 12}, ${55 + i * 18}, ${30 + i * 12})`;
+      ctx.fill();
+
+      if (tree.snow > 0.4) {
+        ctx.beginPath();
+        ctx.ellipse(p.x, cy - h * 0.08, rw * 0.8, h * 0.1, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(235, 240, 250, ${tree.snow * 0.5})`;
+        ctx.fill();
+      }
+    }
+  } else {
+    // Bare/dead tree
+    ctx.strokeStyle = '#5a4030';
+    ctx.lineWidth = Math.max(1, w * 0.15);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x, p.y - h);
+    ctx.stroke();
+
+    // Branches
+    const branches = 4;
+    for (let i = 0; i < branches; i++) {
+      const by = p.y - h * (0.4 + i * 0.15);
+      const dir = i % 2 === 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(p.x, by);
+      ctx.lineTo(p.x + dir * w * 0.8, by - h * 0.12);
+      ctx.lineWidth = Math.max(1, w * 0.08);
+      ctx.stroke();
+    }
+  }
+
+  // Shadow
+  ctx.beginPath();
+  ctx.ellipse(p.x + w * 0.3, p.y, w * 0.8, w * 0.15, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(100, 110, 140, 0.15)';
+  ctx.fill();
+}
+
+function drawRock(rock) {
+  const p = project(rock.x, 0, rock.z);
+  if (!p || p.scale < 0.1) return;
+
+  const s = rock.size * p.scale;
+
+  ctx.beginPath();
+  if (rock.type === 0) {
+    // Round rock
+    ctx.ellipse(p.x, p.y - s * 0.4, s, s * 0.6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#6a6a7a';
+  } else if (rock.type === 1) {
+    // Angular rock
+    ctx.moveTo(p.x - s, p.y);
+    ctx.lineTo(p.x - s * 0.6, p.y - s * 0.9);
+    ctx.lineTo(p.x + s * 0.3, p.y - s * 1.1);
+    ctx.lineTo(p.x + s, p.y - s * 0.3);
+    ctx.lineTo(p.x + s * 0.5, p.y);
+    ctx.fillStyle = '#5a5a6a';
+  } else {
+    // Flat rock
+    ctx.ellipse(p.x, p.y - s * 0.15, s * 1.2, s * 0.3, 0.1, 0, Math.PI * 2);
+    ctx.fillStyle = '#7a7a8a';
+  }
+  ctx.fill();
+
+  // Snow on top
+  ctx.beginPath();
+  ctx.ellipse(p.x - s * 0.1, p.y - s * 0.6, s * 0.7, s * 0.2, -0.1, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(230, 235, 245, 0.6)';
+  ctx.fill();
+
+  // Shadow
+  ctx.beginPath();
+  ctx.ellipse(p.x + s * 0.2, p.y, s * 0.8, s * 0.12, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(100, 110, 140, 0.2)';
+  ctx.fill();
+}
+
+function drawRamp(ramp) {
+  const p1 = project(ramp.x - ramp.width / 2, 0, ramp.z);
+  const p2 = project(ramp.x + ramp.width / 2, 0, ramp.z);
+  const p3 = project(ramp.x + ramp.width / 2, 0, ramp.z + 5);
+  const p4 = project(ramp.x - ramp.width / 2, 0, ramp.z + 5);
+  const pt = project(ramp.x, ramp.height, ramp.z);
+
+  if (!p1 || !p2 || !p3 || !p4 || !pt) return;
+
+  // Ramp surface
+  ctx.beginPath();
+  ctx.moveTo(p3.x, p3.y);
+  ctx.lineTo(p4.x, p4.y);
+  ctx.lineTo(pt.x, pt.y - ramp.height * pt.scale);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(200, 215, 235, 0.9)';
+  ctx.fill();
+
+  // Ramp side
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p4.x, p4.y);
+  ctx.lineTo(pt.x, pt.y - ramp.height * pt.scale);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(170, 185, 210, 0.8)';
+  ctx.fill();
+
+  // Edge highlight
+  ctx.beginPath();
+  ctx.moveTo(p4.x, p4.y);
+  ctx.lineTo(pt.x, pt.y - ramp.height * pt.scale);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawCoin(coin) {
+  if (coin.collected) return;
+  const bob = Math.sin(gameTime * 3 + coin.bobOffset) * 0.5;
+  const p = project(coin.x, 1.5 + bob, coin.z);
+  if (!p || p.scale < 0.1) return;
+
+  const r = Math.max(3, 6 * p.scale);
+
+  // Glow
+  const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+  glow.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
+  glow.addColorStop(1, 'rgba(255, 215, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(p.x - r * 3, p.y - r * 3, r * 6, r * 6);
+
+  // Coin
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFD700';
+  ctx.fill();
+  ctx.strokeStyle = '#FFA500';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Shine
+  ctx.beginPath();
+  ctx.arc(p.x - r * 0.2, p.y - r * 0.2, r * 0.4, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 230, 0.6)';
+  ctx.fill();
+}
+
+function drawFlag(flag) {
+  if (flag.passed) return;
+  const p = project(flag.x, 0, flag.z);
+  if (!p || p.scale < 0.1) return;
+
+  const h = 8 * p.scale;
+
+  // Pole
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x, p.y - h);
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = Math.max(1, 2 * p.scale);
+  ctx.stroke();
+
+  // Flag
+  const wave = Math.sin(gameTime * 4 + flag.z) * 3 * p.scale;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y - h);
+  ctx.lineTo(p.x + 6 * p.scale + wave, p.y - h + 2 * p.scale);
+  ctx.lineTo(p.x + wave * 0.5, p.y - h + 5 * p.scale);
+  ctx.closePath();
+  ctx.fillStyle = flag.side > 0 ? '#ff4444' : '#4444ff';
+  ctx.fill();
+}
+
+function drawPlayer() {
+  if (!player.alive && gameTime % 0.2 < 0.1) return;
+
+  const p = project(player.x, player.jumpHeight, player.z);
+  if (!p) return;
+
+  const scale = p.scale;
+  const s = Math.max(8, 20 * scale);
+
+  ctx.save();
+  ctx.translate(p.x, p.y);
+
+  if (player.isJumping) {
+    ctx.rotate(player.spinAngle);
+  }
+  ctx.rotate(player.tilt * 0.5);
+
+  // Shadow (when jumping)
+  if (player.jumpHeight > 0.5) {
+    const shadowP = project(player.x, 0, player.z);
+    if (shadowP) {
+      ctx.restore();
+      ctx.beginPath();
+      ctx.ellipse(shadowP.x, shadowP.y, s * 0.8, s * 0.2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.3 - player.jumpHeight * 0.02})`;
+      ctx.fill();
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      if (player.isJumping) ctx.rotate(player.spinAngle);
+      ctx.rotate(player.tilt * 0.5);
+    }
+  }
+
+  // Board
+  ctx.beginPath();
+  ctx.ellipse(0, s * 0.15, s * 0.9, s * 0.12, player.tilt * 0.3, 0, Math.PI * 2);
+  const boardGrad = ctx.createLinearGradient(-s, 0, s, 0);
+  boardGrad.addColorStop(0, '#1a1a2e');
+  boardGrad.addColorStop(0.5, '#16213e');
+  boardGrad.addColorStop(1, '#0f3460');
+  ctx.fillStyle = boardGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#00d2ff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Body
+  const bodyH = s * 0.8 * (player.tucking ? 0.6 : 1);
+
+  // Legs
+  ctx.fillStyle = '#2a2a3e';
+  ctx.fillRect(-s * 0.2, -bodyH * 0.3, s * 0.15, bodyH * 0.4);
+  ctx.fillRect(s * 0.05, -bodyH * 0.3, s * 0.15, bodyH * 0.4);
+
+  // Torso
+  ctx.beginPath();
+  ctx.ellipse(0, -bodyH * 0.5, s * 0.3, bodyH * 0.35, 0, 0, Math.PI * 2);
+  const jacketGrad = ctx.createLinearGradient(0, -bodyH, 0, 0);
+  jacketGrad.addColorStop(0, '#e74c3c');
+  jacketGrad.addColorStop(1, '#c0392b');
+  ctx.fillStyle = jacketGrad;
+  ctx.fill();
+
+  // Jacket detail
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.15, -bodyH * 0.7);
+  ctx.lineTo(0, -bodyH * 0.3);
+  ctx.lineTo(s * 0.15, -bodyH * 0.7);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Arms
+  if (player.tucking) {
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(-s * 0.35, -bodyH * 0.55, s * 0.12, bodyH * 0.15);
+    ctx.fillRect(s * 0.23, -bodyH * 0.55, s * 0.12, bodyH * 0.15);
+  } else {
+    const armWave = Math.sin(gameTime * 3) * 0.1;
+    ctx.save();
+    ctx.translate(-s * 0.3, -bodyH * 0.55);
+    ctx.rotate(-0.5 + armWave);
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(0, 0, s * 0.08, bodyH * 0.35);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(s * 0.3, -bodyH * 0.55);
+    ctx.rotate(0.5 - armWave);
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(-s * 0.08, 0, s * 0.08, bodyH * 0.35);
+    ctx.restore();
+  }
+
+  // Head
+  ctx.beginPath();
+  ctx.arc(0, -bodyH * 0.85, s * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = '#f0c8a0';
+  ctx.fill();
+
+  // Helmet
+  ctx.beginPath();
+  ctx.arc(0, -bodyH * 0.88, s * 0.2, Math.PI, 0);
+  ctx.fillStyle = '#2c3e50';
+  ctx.fill();
+
+  // Goggles
+  ctx.beginPath();
+  ctx.ellipse(0, -bodyH * 0.85, s * 0.15, s * 0.06, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#00d2ff';
+  ctx.globalAlpha = 0.7;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const part of particles) {
+    const p = project(part.x, part.y, part.z);
+    if (!p) continue;
+
+    const s = Math.max(1, part.size * p.scale);
+
+    if (part.type === 'snow') {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(240, 245, 255, ${part.life})`;
+      ctx.fill();
+    } else if (part.type === 'coin') {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 215, 0, ${part.life})`;
+      ctx.fill();
+    } else if (part.type === 'spark') {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, s * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 200, 100, ${part.life})`;
+      ctx.fill();
+    } else if (part.type === 'crash') {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, ${Math.floor(100 + part.life * 155)}, ${Math.floor(part.life * 100)}, ${part.life})`;
+      ctx.fill();
+    }
+  }
+}
+
+function drawMinimap() {
+  mctx.clearRect(0, 0, 60, 200);
+
+  // Background
+  mctx.fillStyle = 'rgba(20, 30, 50, 0.5)';
+  mctx.fillRect(0, 0, 60, 200);
+
+  const mapRange = 400;
+
+  // Draw terrain path
+  mctx.beginPath();
+  mctx.strokeStyle = 'rgba(200, 210, 230, 0.5)';
+  mctx.lineWidth = 2;
+  for (const seg of terrainSegments) {
+    const relZ = (seg.z - player.z) / mapRange;
+    if (relZ < -0.1 || relZ > 1) continue;
+    const mx = 30 + seg.x * 0.3;
+    const my = 180 - relZ * 170;
+    if (seg === terrainSegments[0]) mctx.moveTo(mx, my);
+    else mctx.lineTo(mx, my);
+  }
+  mctx.stroke();
+
+  // Draw objects on minimap
+  for (const rock of rocks) {
+    const relZ = (rock.z - player.z) / mapRange;
+    if (relZ < -0.1 || relZ > 1) continue;
+    mctx.fillStyle = 'rgba(150, 150, 170, 0.7)';
+    mctx.fillRect(30 + rock.x * 0.3 - 1, 180 - relZ * 170 - 1, 2, 2);
+  }
+
+  for (const coin of coins) {
+    if (coin.collected) continue;
+    const relZ = (coin.z - player.z) / mapRange;
+    if (relZ < -0.1 || relZ > 1) continue;
+    mctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
+    mctx.fillRect(30 + coin.x * 0.3 - 1, 180 - relZ * 170 - 1, 2, 2);
+  }
+
+  // Player dot
+  mctx.beginPath();
+  mctx.arc(30 + player.x * 0.3, 180, 3, 0, Math.PI * 2);
+  mctx.fillStyle = '#00ff88';
+  mctx.fill();
+}
+
+function updateUI() {
+  document.getElementById('score').textContent = score.toLocaleString();
+  document.getElementById('distance').textContent = `${distance}m`;
+  document.getElementById('speed').textContent = `${Math.floor(player.speed * 3.6)} km/h`;
+
+  const speedPercent = (player.speed / player.maxSpeed) * 100;
+  const speedBar = document.getElementById('speed-bar');
+  speedBar.style.width = speedPercent + '%';
+  speedBar.style.background = speedPercent > 80 ? 'linear-gradient(90deg, #ff4444, #ff8800)' :
+                               speedPercent > 50 ? 'linear-gradient(90deg, #ffaa00, #ffdd00)' :
+                                                    'linear-gradient(90deg, #44aaff, #00ddff)';
+
+  if (combo > 0 && comboOpacity > 0) {
+    const comboEl = document.getElementById('combo-display');
+    comboEl.textContent = `${combo}x COMBO!`;
+    comboEl.style.opacity = comboOpacity;
+    comboOpacity = Math.max(0, comboOpacity - 0.01);
+  }
+}
+
+// Post-processing: vignette + fog
+function drawPostProcessing() {
+  // Vignette
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.8);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.4)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  // Speed lines when fast
+  if (player.speed > 15) {
+    const intensity = (player.speed - 15) / 10;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${intensity * 0.1})`;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (Math.random() - 0.5) * 10, y + 20 + Math.random() * 30);
+      ctx.stroke();
+    }
+  }
+}
+
+let lastTime = 0;
+function gameLoop(time) {
+  if (!gameRunning) return;
+
+  const dt = Math.min((time - lastTime) / 1000, 0.05);
+  lastTime = time;
+  gameTime += dt;
+
+  // Update
+  updatePlayer(dt);
+  updateCamera(dt);
+  updateParticles(dt);
+  updateSnowfall();
+  extendTerrain();
+
+  // Render
+  ctx.clearRect(0, 0, W, H);
+
+  drawSky();
+  drawTerrain();
+  drawTrail();
+
+  // Sort and draw objects by Z (far to near)
+  const allObjects = [];
+  trees.forEach(t => allObjects.push({ z: t.z, type: 'tree', obj: t }));
+  rocks.forEach(r => allObjects.push({ z: r.z, type: 'rock', obj: r }));
+  ramps.forEach(r => allObjects.push({ z: r.z, type: 'ramp', obj: r }));
+  coins.forEach(c => allObjects.push({ z: c.z, type: 'coin', obj: c }));
+  flags.forEach(f => allObjects.push({ z: f.z, type: 'flag', obj: f }));
+  allObjects.push({ z: player.z, type: 'player', obj: null });
+
+  allObjects.sort((a, b) => b.z - a.z);
+
+  for (const obj of allObjects) {
+    if (obj.z < camera.z - 10 || obj.z > camera.z + VISIBLE_SEGMENTS * SEGMENT_LENGTH) continue;
+    switch (obj.type) {
+      case 'tree': drawTree(obj.obj); break;
+      case 'rock': drawRock(obj.obj); break;
+      case 'ramp': drawRamp(obj.obj); break;
+      case 'coin': drawCoin(obj.obj); break;
+      case 'flag': drawFlag(obj.obj); break;
+      case 'player': drawPlayer(); break;
+    }
+  }
+
+  drawParticles();
+  drawSnowfall();
+  drawPostProcessing();
+  drawMinimap();
+  updateUI();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('game-over-screen').style.display = 'none';
+
+  // Reset
+  player.x = 0; player.y = 0; player.z = 0;
+  player.vx = 0; player.vy = 0; player.vz = 0;
+  player.speed = 0; player.targetSpeed = 4;
+  player.angle = 0; player.tilt = 0;
+  player.isJumping = false; player.jumpHeight = 0;
+  player.jumpVel = 0; player.grounded = true;
+  player.tricks = 0; player.spinAngle = 0; player.flipAngle = 0;
+  player.tucking = false; player.braking = false;
+  player.alive = true; player.invincible = 2;
+
+  camera.x = 0; camera.y = 8; camera.z = -12;
+  camera.shake = 0;
+
+  score = 0; distance = 0; combo = 0; comboTimer = 0;
+  gameTime = 0;
+  particles = []; trailPoints = [];
+
+  initTerrain();
+  initSnowfall();
+
+  gameRunning = true;
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function restartGame() {
+  startGame();
+}
+
+// Init snowfall for menu
+initSnowfall();
+function menuSnow() {
+  if (gameRunning) return;
+  const menuCanvas = canvas;
+  ctx.fillStyle = '#1a1a3e';
+  ctx.fillRect(0, 0, W, H);
+  updateSnowfall();
+  drawSnowfall();
+  requestAnimationFrame(menuSnow);
+}
+menuSnow();
+</script>
+</body>
+</html>

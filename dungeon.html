@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>⚔️ 어둠의 탑 - Dark Tower RPG</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a14;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Segoe UI','맑은 고딕',sans-serif;overflow:hidden;}
+#gc{position:relative;width:900px;height:640px;border-radius:12px;overflow:hidden;box-shadow:0 0 50px rgba(80,40,120,0.3);}
+canvas{display:block;}
+/* Title */
+#title{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(180deg,#0a0a1a 0%,#1a1030 40%,#2a1848 100%);z-index:100;}
+#title h1{font-size:52px;color:#FFD54F;text-shadow:0 0 20px rgba(255,213,79,0.5),2px 2px 4px #000;margin-bottom:6px;}
+#title .sub{font-size:16px;color:#B39DDB;margin-bottom:35px;}
+#title button{padding:12px 44px;font-size:18px;border:none;border-radius:20px;cursor:pointer;margin:6px;font-family:inherit;transition:transform 0.2s;}
+#title button:hover{transform:scale(1.05);}
+.btn-new{background:linear-gradient(135deg,#FF8A65,#E64A19);color:#fff;}
+.btn-load{background:linear-gradient(135deg,#7E57C2,#4527A0);color:#fff;}
+.btn-load:disabled{opacity:0.35;cursor:not-allowed;transform:none!important;}
+#title .info{margin-top:25px;color:#9575CD;font-size:12px;line-height:1.8;text-align:center;}
+/* Class select */
+#classSelect{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(180deg,#0a0a1a,#1a1030);z-index:100;}
+#classSelect h2{color:#FFD54F;font-size:28px;margin-bottom:20px;}
+.class-options{display:flex;gap:12px;}
+.class-card{width:160px;padding:16px;background:rgba(255,255,255,0.05);border-radius:14px;border:2px solid transparent;cursor:pointer;text-align:center;transition:all 0.2s;}
+.class-card:hover,.class-card.sel{border-color:#FFD54F;background:rgba(255,215,0,0.08);}
+.class-card .emoji{font-size:40px;}
+.class-card .cname{color:#fff;font-size:16px;font-weight:bold;margin:6px 0;}
+.class-card .cdesc{color:#aaa;font-size:11px;line-height:1.4;}
+.class-card .cstats{color:#9575CD;font-size:10px;margin-top:6px;}
+#classConfirm{margin-top:20px;padding:10px 36px;font-size:16px;border:none;border-radius:16px;background:linear-gradient(135deg,#FFD54F,#FFA000);color:#333;cursor:pointer;font-family:inherit;display:none;}
+/* Game Over */
+#gameover{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.8);z-index:100;backdrop-filter:blur(4px);}
+#gameover h1{font-size:48px;color:#EF5350;text-shadow:0 0 15px rgba(239,83,80,0.5);margin-bottom:10px;}
+#gameover .go-info{color:#fff;font-size:18px;margin:4px 0;}
+#gameover .go-sub{color:#FFD54F;font-size:14px;margin:10px 0 25px;}
+#gameover button{padding:10px 36px;font-size:16px;border:none;border-radius:16px;background:linear-gradient(135deg,#7E57C2,#4527A0);color:#fff;cursor:pointer;font-family:inherit;}
+/* Victory */
+#victory{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.7);z-index:100;backdrop-filter:blur(4px);}
+#victory h1{font-size:48px;color:#FFD54F;text-shadow:0 0 20px rgba(255,213,79,0.6);margin-bottom:10px;}
+#victory .v-info{color:#fff;font-size:18px;margin:4px 0;}
+#victory button{padding:10px 36px;font-size:16px;border:none;border-radius:16px;background:linear-gradient(135deg,#FFD54F,#FFA000);color:#333;cursor:pointer;font-family:inherit;margin-top:20px;}
+/* HUD */
+#hud{position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:10;}
+#floor-info{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#FFD54F;padding:5px 18px;border-radius:10px;font-size:14px;backdrop-filter:blur(2px);}
+#player-stats{position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.55);padding:8px 12px;border-radius:10px;backdrop-filter:blur(2px);}
+.ps-row{display:flex;align-items:center;margin-bottom:3px;font-size:12px;color:#fff;}
+.ps-row .icon{width:18px;text-align:center;margin-right:4px;}
+.ps-bar{width:90px;height:8px;background:rgba(255,255,255,0.12);border-radius:4px;overflow:hidden;margin:0 4px;}
+.ps-fill{height:100%;border-radius:4px;transition:width 0.3s;}
+.ps-val{min-width:50px;font-size:11px;}
+#player-info{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);padding:8px 12px;border-radius:10px;color:#fff;font-size:12px;backdrop-filter:blur(2px);text-align:right;}
+/* Battle UI */
+#battleUI{position:absolute;bottom:0;left:0;width:100%;display:none;z-index:20;}
+#battleMenu{background:linear-gradient(0deg,rgba(10,10,20,0.95),rgba(10,10,20,0.8));padding:12px 20px;display:flex;gap:8px;justify-content:center;}
+.bm-btn{padding:8px 20px;border:2px solid rgba(255,255,255,0.15);border-radius:10px;background:rgba(255,255,255,0.05);color:#fff;font-size:14px;cursor:pointer;font-family:inherit;transition:all 0.15s;}
+.bm-btn.sel{border-color:#FFD54F;background:rgba(255,215,0,0.12);color:#FFD54F;}
+.bm-btn .key{font-size:10px;color:rgba(255,255,255,0.4);margin-right:4px;}
+#battleLog{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#fff;padding:8px 16px;border-radius:10px;font-size:13px;max-width:500px;text-align:center;backdrop-filter:blur(2px);pointer-events:none;}
+#enemyInfo{position:absolute;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);padding:6px 16px;border-radius:10px;backdrop-filter:blur(2px);text-align:center;}
+.ei-name{color:#EF5350;font-size:16px;font-weight:bold;}
+.ei-hp{display:flex;align-items:center;justify-content:center;margin-top:3px;}
+.ei-bar{width:140px;height:8px;background:rgba(255,255,255,0.12);border-radius:4px;overflow:hidden;margin:0 6px;}
+.ei-fill{height:100%;background:linear-gradient(90deg,#EF5350,#C62828);border-radius:4px;transition:width 0.3s;}
+.ei-val{color:#fff;font-size:11px;}
+/* Skill select */
+#skillSelect{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(10,10,30,0.92);padding:10px;border-radius:12px;display:none;z-index:25;border:1px solid rgba(255,255,255,0.1);}
+.sk-btn{display:block;width:240px;padding:6px 12px;margin:3px 0;border:2px solid transparent;border-radius:8px;background:rgba(255,255,255,0.05);color:#fff;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;transition:all 0.15s;}
+.sk-btn.sel{border-color:#64B5F6;background:rgba(100,181,246,0.12);}
+.sk-btn.disabled{opacity:0.35;cursor:not-allowed;}
+.sk-btn .sk-cost{float:right;color:#64B5F6;font-size:11px;}
+/* Inventory/Shop/LevelUp panels */
+.panel-overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.6);z-index:50;backdrop-filter:blur(3px);}
+.panel-box{background:rgba(15,15,30,0.95);border-radius:14px;padding:16px 20px;border:1px solid rgba(255,255,255,0.1);max-height:520px;overflow-y:auto;min-width:360px;}
+.panel-title{color:#FFD54F;font-size:18px;font-weight:bold;text-align:center;margin-bottom:10px;}
+.panel-hint{color:#777;font-size:11px;text-align:center;margin-bottom:8px;}
+.item-row{display:flex;align-items:center;padding:7px 10px;margin:3px 0;background:rgba(255,255,255,0.04);border-radius:8px;border:2px solid transparent;cursor:pointer;transition:all 0.15s;}
+.item-row.sel{border-color:#FFD54F;background:rgba(255,215,0,0.08);}
+.item-row .it-emoji{font-size:22px;margin-right:10px;}
+.item-row .it-info{flex:1;}
+.item-row .it-name{color:#fff;font-size:13px;}
+.item-row .it-desc{color:#999;font-size:11px;}
+.item-row .it-price{color:#FFD54F;font-size:12px;}
+.item-row .it-eq{color:#66BB6A;font-size:11px;margin-left:6px;}
+.stat-row{display:flex;align-items:center;padding:5px 0;color:#fff;font-size:13px;}
+.stat-row .sr-name{width:60px;color:#B39DDB;}
+.stat-row .sr-val{width:30px;text-align:center;color:#FFD54F;font-weight:bold;}
+.stat-row .sr-btn{padding:2px 10px;margin-left:4px;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;font-size:12px;}
+.stat-row .sr-btn:hover{border-color:#FFD54F;}
+.notify{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#FFD54F;font-size:20px;font-weight:bold;pointer-events:none;z-index:30;text-shadow:0 0 10px rgba(255,213,79,0.5);opacity:0;transition:opacity 0.3s;}
+.notify.show{opacity:1;}
+#msgBox{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#ccc;padding:6px 16px;border-radius:10px;font-size:12px;pointer-events:none;z-index:15;opacity:0;transition:opacity 0.3s;backdrop-filter:blur(2px);}
+#msgBox.show{opacity:1;}
+#minimap{position:absolute;top:8px;right:8px;z-index:10;pointer-events:none;display:none;}
+</style>
+</head>
+<body>
+<div id="gc">
+<canvas id="cv" width="900" height="640"></canvas>
+<div id="hud">
+  <div id="floor-info">🏰 1층</div>
+  <div id="player-stats">
+    <div class="ps-row"><span class="icon">❤️</span><div class="ps-bar"><div class="ps-fill" id="hpBar" style="width:100%;background:linear-gradient(90deg,#EF5350,#C62828)"></div></div><span class="ps-val" id="hpVal">100/100</span></div>
+    <div class="ps-row"><span class="icon">💎</span><div class="ps-bar"><div class="ps-fill" id="mpBar" style="width:100%;background:linear-gradient(90deg,#42A5F5,#1565C0)"></div></div><span class="ps-val" id="mpVal">50/50</span></div>
+    <div class="ps-row"><span class="icon">⭐</span><div class="ps-bar"><div class="ps-fill" id="xpBar" style="width:0%;background:linear-gradient(90deg,#FFD54F,#FFA000)"></div></div><span class="ps-val" id="xpVal">Lv.1</span></div>
+  </div>
+  <div id="player-info">
+    <div id="pi-class">전사</div>
+    <div id="pi-gold">💰 0</div>
+    <div id="pi-atk">⚔️ 10</div>
+    <div id="pi-def">🛡️ 5</div>
+  </div>
+</div>
+<div id="battleUI">
+  <div id="enemyInfo"></div>
+  <div id="battleLog"></div>
+  <div id="battleMenu"></div>
+</div>
+<div id="skillSelect"></div>
+<div class="panel-overlay" id="invPanel"><div class="panel-box" id="invBox"></div></div>
+<div class="panel-overlay" id="shopPanel"><div class="panel-box" id="shopBox"></div></div>
+<div class="panel-overlay" id="lvlPanel"><div class="panel-box" id="lvlBox"></div></div>
+<div id="msgBox"></div>
+<div class="notify" id="notifyEl"></div>
+<canvas id="minimap" width="100" height="100"></canvas>
+
+<div id="title">
+  <h1>⚔️ 어둠의 탑</h1>
+  <div class="sub">100층의 탑을 올라 어둠을 물리쳐라</div>
+  <button class="btn-new" onclick="showClassSelect()">새 게임</button>
+  <button class="btn-load" id="btnLoad" onclick="doLoad()" disabled>이어하기</button>
+  <div class="info">WASD/방향키: 이동 | E: 상호작용 | I: 인벤토리<br>전투: 1~5키로 선택 | M: 저장</div>
+</div>
+<div id="classSelect">
+  <h2>⚔️ 직업을 선택하라</h2>
+  <div class="class-options" id="classOpts"></div>
+  <button id="classConfirm" onclick="confirmClass()">선택 완료</button>
+</div>
+<div id="gameover">
+  <h1>💀 사망</h1>
+  <div class="go-info" id="goFloor"></div>
+  <div class="go-info" id="goLvl"></div>
+  <div class="go-sub">어둠이 삼켰다...</div>
+  <button onclick="goTitle()">타이틀로</button>
+</div>
+<div id="victory">
+  <h1>🏆 축하합니다!</h1>
+  <div class="v-info">어둠의 탑을 정복했다!</div>
+  <div class="v-info" id="vicLvl"></div>
+  <button onclick="goTitle()">타이틀로</button>
+</div>
+</div>
+
+<script>
+// ===== AUDIO =====
+const AC=window.AudioContext||window.webkitAudioContext;let ac=null;
+function ea(){if(!ac)ac=new AC();}
+function pn(f,d,t,v){ea();if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type=t||'sine';o.frequency.value=f;g.gain.value=v||0.03;g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d);}
+function sfxStep(){pn(200,0.04,'sine',0.015);}
+function sfxHit(){pn(150,0.08,'sawtooth',0.05);pn(200,0.06,'square',0.03);}
+function sfxMagic(){pn(600,0.15,'sine',0.04);setTimeout(()=>pn(800,0.12,'sine',0.03),100);}
+function sfxHeal(){pn(523,0.1,'sine',0.04);setTimeout(()=>pn(659,0.1,'sine',0.04),120);setTimeout(()=>pn(784,0.15,'sine',0.04),240);}
+function sfxDeath(){pn(200,0.3,'sawtooth',0.05);setTimeout(()=>pn(150,0.3,'sawtooth',0.04),300);}
+function sfxLvl(){pn(523,0.12,'square',0.04);setTimeout(()=>pn(659,0.1,'square',0.04),150);setTimeout(()=>pn(784,0.1,'square',0.04),300);setTimeout(()=>pn(1047,0.2,'square',0.05),450);}
+function sfxChest(){pn(400,0.08,'sine',0.04);setTimeout(()=>pn(600,0.08,'sine',0.04),100);setTimeout(()=>pn(800,0.1,'sine',0.05),200);}
+function sfxStairs(){pn(300,0.1,'triangle',0.04);setTimeout(()=>pn(400,0.1,'triangle',0.04),120);setTimeout(()=>pn(500,0.15,'triangle',0.04),240);}
+function sfxShop(){pn(500,0.08,'sine',0.03);pn(630,0.08,'sine',0.03);}
+function sfxBoss(){pn(100,0.4,'sawtooth',0.06);setTimeout(()=>pn(80,0.4,'sawtooth',0.05),400);}
+let bgmT=0;function playBGM(){bgmT--;if(bgmT>0)return;bgmT=300+Math.random()*200;const notes=state==='battle'?[220,196,165,147]:[330,392,440,494];const n=notes[Math.floor(Math.random()*notes.length)];pn(n,0.5,'sine',0.01);}
+
+// ===== CONSTANTS =====
+const cv=document.getElementById('cv'),c=cv.getContext('2d');
+const W=900,H=640,T=40;
+const MAP_S=15; // 15x15 rooms
+
+// ===== CLASSES =====
+const CLASSES=[
+  {key:'warrior',name:'전사',emoji:'⚔️',desc:'높은 체력과 공격력\n근접 전투의 달인',hp:120,mp:30,str:12,int:4,agi:6,def:8,
+   skills:[{name:'강타',cost:5,dmgMul:1.8,type:'phys',desc:'강력한 일격'},{name:'방패올리기',cost:8,type:'buff',buff:'def',val:5,dur:3,desc:'방어력 +5 (3턴)'},{name:'전쟁함성',cost:12,dmgMul:2.5,type:'phys',desc:'적을 압도하는 함성'}]},
+  {key:'mage',name:'마법사',emoji:'🧙',desc:'강력한 마법 공격\n높은 MP와 지능',hp:80,mp:80,str:4,int:14,agi:5,def:4,
+   skills:[{name:'파이어볼',cost:8,dmgMul:2.0,type:'magic',desc:'화염 마법'},{name:'아이스볼트',cost:6,dmgMul:1.5,type:'magic',desc:'적 속도 감소',debuff:'agi',val:3,dur:2},{name:'썬더',cost:15,dmgMul:3.0,type:'magic',desc:'번개 강타'}]},
+  {key:'archer',name:'궁수',emoji:'🏹',desc:'높은 민첩과 치명타\n원거리 전문가',hp:90,mp:50,str:8,int:6,agi:14,def:5,
+   skills:[{name:'더블샷',cost:6,dmgMul:1.6,type:'phys',hits:2,desc:'2연사'},{name:'독화살',cost:8,dmgMul:1.2,type:'phys',desc:'독 부여',dot:3,dotDmg:5},{name:'화살비',cost:14,dmgMul:2.2,type:'phys',desc:'화살 폭풍'}]},
+  {key:'thief',name:'도적',emoji:'🗡️',desc:'높은 회피와 치명타\n보물 발견 보너스',hp:85,mp:45,str:8,int:5,agi:15,def:4,
+   skills:[{name:'기습',cost:5,dmgMul:2.0,type:'phys',desc:'기습 공격 (높은 치명타)'},{name:'그림자숨기',cost:10,type:'buff',buff:'agi',val:8,dur:2,desc:'회피 대폭 증가'},{name:'암살',cost:16,dmgMul:3.5,type:'phys',desc:'치명적 일격'}]},
+];
+
+// ===== ITEMS =====
+const POTIONS=[
+  {name:'작은 HP포션',emoji:'🧪',type:'potion',sub:'hp',val:30,price:15,desc:'체력 30 회복'},
+  {name:'큰 HP포션',emoji:'🧪',type:'potion',sub:'hp',val:80,price:40,desc:'체력 80 회복'},
+  {name:'작은 MP포션',emoji:'💙',type:'potion',sub:'mp',val:20,price:12,desc:'마나 20 회복'},
+  {name:'큰 MP포션',emoji:'💙',type:'potion',sub:'mp',val:50,price:35,desc:'마나 50 회복'},
+  {name:'해독제',emoji:'💚',type:'potion',sub:'cure',val:0,price:10,desc:'상태이상 해제'},
+  {name:'만능약',emoji:'⭐',type:'potion',sub:'full',val:0,price:100,desc:'HP/MP 완전 회복'},
+];
+
+function genWeapons(floor){
+  const tier=Math.floor(floor/10);
+  const names=[['낡은 검','녹슨 지팡이','나무 활','단검'],['철 검','마법봉','장궁','은단검'],['미스릴 검','현자의 지팡이','정밀 활','비수'],['영웅의 검','대마법사 지팡이','폭풍 활','암살자 단검'],['전설의 검','태고의 지팡이','신궁','어둠의 단검']][Math.min(tier,4)];
+  const emojis=['⚔️','🪄','🏹','🗡️'];
+  const base=5+floor*2+Math.floor(Math.random()*floor);
+  return CLASSES.map((cl,i)=>({name:names[i],emoji:emojis[i],type:'weapon',classKey:cl.key,atk:base+Math.floor(Math.random()*5),price:20+floor*8,desc:`공격력 +${base}`}));
+}
+function genArmors(floor){
+  const tier=Math.floor(floor/10);
+  const names=[['가죽갑옷','천 로브','경갑옷','경량갑옷'],['사슬갑옷','마법 로브','강화갑옷','은갑옷'],['철갑옷','현자 로브','미스릴갑옷','그림자갑옷'],['영웅갑옷','대현자 로브','용갑옷','암살자갑옷'],['전설갑옷','태고 로브','신갑옷','어둠갑옷']][Math.min(tier,4)];
+  const base=3+floor+Math.floor(Math.random()*floor*0.5);
+  return CLASSES.map((cl,i)=>({name:names[i],emoji:'🛡️',type:'armor',classKey:cl.key,def:base+Math.floor(Math.random()*3),price:18+floor*7,desc:`방어력 +${base}`}));
+}
+
+// ===== MONSTERS =====
+const MON_POOL=[
+  {name:'슬라임',emoji:'🟢',tier:0,hp:20,atk:5,def:2,xp:8,gold:5},
+  {name:'고블린',emoji:'👺',tier:0,hp:28,atk:8,def:3,xp:12,gold:8},
+  {name:'박쥐',emoji:'🦇',tier:0,hp:15,atk:6,def:1,xp:6,gold:4},
+  {name:'해골병사',emoji:'💀',tier:1,hp:45,atk:14,def:6,xp:20,gold:15},
+  {name:'오크',emoji:'👹',tier:1,hp:55,atk:16,def:8,xp:25,gold:18},
+  {name:'거미여왕',emoji:'🕷️',tier:1,hp:40,atk:12,def:5,xp:18,gold:12,dot:2,dotDmg:3},
+  {name:'다크나이트',emoji:'🖤',tier:2,hp:80,atk:22,def:12,xp:40,gold:30},
+  {name:'리치',emoji:'☠️',tier:2,hp:65,atk:28,def:8,xp:45,gold:35,magic:true},
+  {name:'미노타우르스',emoji:'🐂',tier:2,hp:100,atk:25,def:15,xp:50,gold:40},
+  {name:'드래곤나이트',emoji:'🐲',tier:3,hp:140,atk:35,def:20,xp:70,gold:55},
+  {name:'뱀파이어',emoji:'🧛',tier:3,hp:110,atk:30,def:16,xp:60,gold:50,lifesteal:true},
+  {name:'데스워커',emoji:'👻',tier:3,hp:90,atk:38,def:10,xp:65,gold:48},
+  {name:'고대골렘',emoji:'🗿',tier:4,hp:200,atk:40,def:30,xp:90,gold:70},
+  {name:'어둠마법사',emoji:'🧙‍♂️',tier:4,hp:150,atk:50,def:18,xp:100,gold:80,magic:true},
+  {name:'타락천사',emoji:'😈',tier:4,hp:180,atk:45,def:25,xp:110,gold:90},
+];
+const BOSSES=[
+  {name:'고블린 왕',emoji:'👑',hp:100,atk:18,def:10,xp:60,gold:50,floor:10},
+  {name:'뼈의 군주',emoji:'💀',hp:180,atk:28,def:15,xp:100,gold:80,floor:20},
+  {name:'화염 드래곤',emoji:'🐉',hp:300,atk:40,def:22,xp:160,gold:120,floor:30},
+  {name:'암흑 기사단장',emoji:'⚫',hp:400,atk:50,def:28,xp:220,gold:160,floor:40},
+  {name:'심연의 크라켄',emoji:'🦑',hp:500,atk:55,def:30,xp:280,gold:200,floor:50},
+  {name:'죽음의 왕',emoji:'☠️',hp:600,atk:60,def:32,xp:350,gold:250,floor:60},
+  {name:'혼돈의 마왕',emoji:'😈',hp:750,atk:70,def:35,xp:420,gold:300,floor:70},
+  {name:'용의 황제',emoji:'🐲',hp:900,atk:80,def:40,xp:500,gold:400,floor:80},
+  {name:'어둠의 신관',emoji:'🌑',hp:1100,atk:90,def:45,xp:600,gold:500,floor:90},
+  {name:'어둠의 군주',emoji:'👿',hp:1500,atk:100,def:50,xp:1000,gold:999,floor:100},
+];
+
+// ===== GAME STATE =====
+let state='title'; // title,classSelect,explore,battle,inventory,shop,levelup,gameover,victory
+let floor=1;
+let map=[],mapRevealed=[];
+let px=0,py=0,pdir=0; // player pos/dir
+let cam={x:0,y:0};
+let player={};
+let inv=[];
+let equip={weapon:null,armor:null};
+let enemy=null;
+let battleState=''; // menu,skill,item
+let bCursor=0,bSkCursor=0,bItCursor=0;
+let bLog='';
+let bTurn='player'; // player,enemy,done
+let buffs=[],debuffs=[];
+let dotEffects=[];
+let msgText='',msgTimer=0;
+let notText='',notTimer=0;
+let pendingLevelUps=0;
+let lvlPoints=0;
+let lvlCursor=0;
+let invCursor=0;
+let shopCursor=0;
+let shopItems=[];
+let autoSaveT=0;
+let animFrame=0;
+
+// Tile types: 0=wall, 1=floor, 2=stairs, 3=chest, 4=shop, 5=trap, 6=heal, 7=monster
+const TW=0,TF=1,TS=2,TC=3,TSH=4,TT=5,TH=6,TM=7;
+
+// ===== MAP GEN =====
+function genMap(){
+  map=[];mapRevealed=[];
+  for(let y=0;y<MAP_S;y++){map[y]=[];mapRevealed[y]=[];for(let x=0;x<MAP_S;x++){map[y][x]=TW;mapRevealed[y][x]=false;}}
+
+  // BSP-lite: carve rooms
+  const rooms=[];
+  const numRooms=5+Math.floor(Math.random()*4);
+  for(let i=0;i<numRooms;i++){
+    const rw=3+Math.floor(Math.random()*3);
+    const rh=3+Math.floor(Math.random()*3);
+    const rx=1+Math.floor(Math.random()*(MAP_S-rw-2));
+    const ry=1+Math.floor(Math.random()*(MAP_S-rh-2));
+    rooms.push({x:rx,y:ry,w:rw,h:rh,cx:Math.floor(rx+rw/2),cy:Math.floor(ry+rh/2)});
+    for(let dy=0;dy<rh;dy++)for(let dx=0;dx<rw;dx++)map[ry+dy][rx+dx]=TF;
+  }
+  // Connect rooms with corridors
+  for(let i=1;i<rooms.length;i++){
+    let ax=rooms[i-1].cx,ay=rooms[i-1].cy;
+    let bx=rooms[i].cx,by=rooms[i].cy;
+    while(ax!==bx){map[ay][ax]=map[ay][ax]===TW?TF:map[ay][ax];ax+=ax<bx?1:-1;}
+    while(ay!==by){map[ay][ax]=map[ay][ax]===TW?TF:map[ay][ax];ay+=ay<by?1:-1;}
+    map[ay][ax]=TF;
+  }
+
+  // Place stairs in last room
+  const lr=rooms[rooms.length-1];
+  map[lr.cy][lr.cx]=TS;
+
+  // Place player in first room
+  px=rooms[0].cx;py=rooms[0].cy;
+
+  // Place features
+  const floors=[];
+  for(let y=0;y<MAP_S;y++)for(let x=0;x<MAP_S;x++)if(map[y][x]===TF&&(x!==px||y!==py))floors.push({x,y});
+  shuffle(floors);
+
+  let fi=0;
+  // Chests
+  const nChest=1+Math.floor(Math.random()*2);
+  for(let i=0;i<nChest&&fi<floors.length;i++){map[floors[fi].y][floors[fi].x]=TC;fi++;}
+  // Monsters
+  const nMon=3+Math.floor(Math.random()*3)+Math.floor(floor/5);
+  for(let i=0;i<nMon&&fi<floors.length;i++){map[floors[fi].y][floors[fi].x]=TM;fi++;}
+  // Traps
+  if(floor>3){const nT=1+Math.floor(Math.random()*2);for(let i=0;i<nT&&fi<floors.length;i++){map[floors[fi].y][floors[fi].x]=TT;fi++;}}
+  // Heal fountain
+  if(Math.random()<0.4||floor%5===0){if(fi<floors.length){map[floors[fi].y][floors[fi].x]=TH;fi++;}}
+  // Shop every 5 floors
+  if(floor%5===0){if(fi<floors.length){map[floors[fi].y][floors[fi].x]=TSH;fi++;}}
+
+  revealAround(px,py);
+}
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+function revealAround(x,y){
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const nx=x+dx,ny=y+dy;
+    if(nx>=0&&nx<MAP_S&&ny>=0&&ny<MAP_S)mapRevealed[ny][nx]=true;
+  }
+}
+
+// ===== PLAYER INIT =====
+function initPlayer(classIdx){
+  const cl=CLASSES[classIdx];
+  player={
+    classKey:cl.key,className:cl.name,classEmoji:cl.emoji,classIdx,
+    level:1,xp:0,xpNext:30,
+    maxHp:cl.hp,hp:cl.hp,
+    maxMp:cl.mp,mp:cl.mp,
+    str:cl.str,int:cl.int,agi:cl.agi,def:cl.def,
+    gold:0,
+    skills:cl.skills.map(s=>({...s})),
+  };
+}
+
+// ===== COMBAT =====
+function getMonster(){
+  const tier=Math.min(4,Math.floor((floor-1)/10));
+  // Boss floors
+  const boss=BOSSES.find(b=>b.floor===floor);
+  if(boss){
+    const scale=1+floor*0.02;
+    sfxBoss();
+    return{...boss,maxHp:Math.floor(boss.hp*scale),hp:Math.floor(boss.hp*scale),atk:Math.floor(boss.atk*scale),def:Math.floor(boss.def*scale),isBoss:true};
+  }
+  // Regular
+  const pool=MON_POOL.filter(m=>m.tier<=tier&&m.tier>=tier-1);
+  const base=pool[Math.floor(Math.random()*pool.length)];
+  const scale=1+(floor-1)*0.08+Math.random()*0.1;
+  return{...base,maxHp:Math.floor(base.hp*scale),hp:Math.floor(base.hp*scale),atk:Math.floor(base.atk*scale),def:Math.floor(base.def*scale),isBoss:false};
+}
+
+function startBattle(mon){
+  enemy=mon||getMonster();
+  state='battle';
+  battleState='menu';
+  bCursor=0;bLog='';bTurn='player';
+  buffs=[];debuffs=[];dotEffects=[];
+  document.getElementById('battleUI').style.display='block';
+  if(enemy.isBoss)showNotify(`⚠️ 보스 출현: ${enemy.name}!`);
+  renderBattle();
+}
+
+function endBattle(won){
+  document.getElementById('battleUI').style.display='none';
+  document.getElementById('skillSelect').style.display='none';
+  if(won){
+    player.xp+=enemy.xp;player.gold+=enemy.gold;
+    showMsg(`🎉 ${enemy.name} 처치! +${enemy.xp}XP +${enemy.gold}G`);
+    checkLevelUp();
+    state='explore';
+  }else{
+    state='gameover';
+    sfxDeath();
+    document.getElementById('gameover').style.display='flex';
+    document.getElementById('goFloor').textContent=`도달 층수: ${floor}층`;
+    document.getElementById('goLvl').textContent=`레벨: ${player.level}`;
+  }
+}
+
+function calcDmg(atk,def,mul){return Math.max(1,Math.floor((atk*mul-def*0.5)*(0.9+Math.random()*0.2)));}
+function isCrit(agi){return Math.random()<(agi*0.015+0.05);}
+
+function playerAttack(){
+  const atkVal=player.str+(equip.weapon?equip.weapon.atk:0)+buffVal('str');
+  const crit=isCrit(player.agi+buffVal('agi'));
+  const mul=crit?1.8:1;
+  const dmg=calcDmg(atkVal,enemy.def,mul);
+  enemy.hp=Math.max(0,enemy.hp-dmg);
+  sfxHit();
+  bLog=`⚔️ ${crit?'치명타! ':''}${dmg} 데미지!`;
+  if(enemy.hp<=0){setTimeout(()=>endBattle(true),600);return;}
+  bTurn='enemy';setTimeout(enemyTurn,700);
+}
+
+function playerSkill(sk){
+  if(player.mp<sk.cost){bLog='💎 마나가 부족하다!';renderBattle();return;}
+  player.mp-=sk.cost;
+  if(sk.type==='buff'){
+    buffs.push({stat:sk.buff,val:sk.val,dur:sk.dur});
+    bLog=`✨ ${sk.name}! ${sk.buff==='def'?'방어력':'민첩'}+${sk.val}(${sk.dur}턴)`;
+    sfxMagic();
+  }else{
+    const base=sk.type==='magic'?player.int+buffVal('int'):player.str+(equip.weapon?equip.weapon.atk:0)+buffVal('str');
+    const hits=sk.hits||1;
+    let totalDmg=0;
+    for(let i=0;i<hits;i++){
+      const crit=isCrit(player.agi+buffVal('agi'));
+      const dmg=calcDmg(base,enemy.def,sk.dmgMul*(crit?1.5:1));
+      totalDmg+=dmg;enemy.hp=Math.max(0,enemy.hp-dmg);
+    }
+    sfxMagic();
+    bLog=`✨ ${sk.name}! ${totalDmg} 데미지!`;
+    if(sk.dot){dotEffects.push({dmg:sk.dotDmg,dur:sk.dot});}
+    if(sk.debuff){debuffs.push({stat:sk.debuff,val:sk.val,dur:sk.dur});}
+  }
+  if(enemy.hp<=0){renderBattle();setTimeout(()=>endBattle(true),600);return;}
+  bTurn='enemy';renderBattle();setTimeout(enemyTurn,700);
+}
+
+function playerUseItem(item,idx){
+  if(item.sub==='hp'){player.hp=Math.min(player.maxHp,player.hp+item.val);sfxHeal();bLog=`🧪 체력 ${item.val} 회복!`;}
+  else if(item.sub==='mp'){player.mp=Math.min(player.maxMp,player.mp+item.val);sfxHeal();bLog=`💙 마나 ${item.val} 회복!`;}
+  else if(item.sub==='cure'){dotEffects=[];sfxHeal();bLog='💚 상태이상 해제!';}
+  else if(item.sub==='full'){player.hp=player.maxHp;player.mp=player.maxMp;sfxHeal();bLog='⭐ 완전 회복!';}
+  inv.splice(idx,1);
+  bTurn='enemy';renderBattle();setTimeout(enemyTurn,700);
+}
+
+function playerFlee(){
+  if(enemy.isBoss){bLog='⚠️ 보스에게서는 도망칠 수 없다!';renderBattle();return;}
+  if(Math.random()<0.4+player.agi*0.01){
+    bLog='🏃 도주 성공!';renderBattle();
+    setTimeout(()=>{document.getElementById('battleUI').style.display='none';state='explore';},500);
+  }else{
+    bLog='🏃 도주 실패!';bTurn='enemy';renderBattle();setTimeout(enemyTurn,700);
+  }
+}
+
+function enemyTurn(){
+  // DoT damage
+  dotEffects=dotEffects.filter(d=>{enemy.hp=Math.max(0,enemy.hp-d.dmg);d.dur--;return d.dur>0;});
+  if(enemy.hp<=0){renderBattle();setTimeout(()=>endBattle(true),400);return;}
+
+  const defVal=player.def+(equip.armor?equip.armor.def:0)+buffVal('def');
+  let atkVal=enemy.atk-debuffVal('atk');
+  const dodge=Math.random()<(player.agi+buffVal('agi'))*0.012;
+  if(dodge){bLog=`${enemy.emoji} ${enemy.name}의 공격을 회피했다!`;}
+  else{
+    const dmg=calcDmg(atkVal,defVal,1);
+    player.hp=Math.max(0,player.hp-dmg);
+    sfxHit();
+    bLog=`${enemy.emoji} ${enemy.name}의 공격! ${dmg} 데미지!`;
+    if(enemy.lifesteal){enemy.hp=Math.min(enemy.maxHp,enemy.hp+Math.floor(dmg*0.3));bLog+=` (흡혈!)`;}
+    if(enemy.dot){
+      const pdmg=enemy.dotDmg||3;
+      player.hp=Math.max(0,player.hp-pdmg);
+      bLog+=` 독 ${pdmg}!`;
+    }
+  }
+  // Tick buffs/debuffs
+  buffs=buffs.filter(b=>{b.dur--;return b.dur>0;});
+  debuffs=debuffs.filter(b=>{b.dur--;return b.dur>0;});
+
+  if(player.hp<=0){renderBattle();setTimeout(()=>endBattle(false),600);return;}
+  bTurn='player';battleState='menu';bCursor=0;
+  renderBattle();
+}
+
+function buffVal(stat){return buffs.filter(b=>b.stat===stat).reduce((s,b)=>s+b.val,0);}
+function debuffVal(stat){return debuffs.filter(b=>b.stat===stat).reduce((s,b)=>s+b.val,0);}
+
+// ===== LEVEL UP =====
+function checkLevelUp(){
+  while(player.xp>=player.xpNext){
+    player.xp-=player.xpNext;
+    player.level++;
+    player.xpNext=Math.floor(player.xpNext*1.4);
+    player.maxHp+=8;player.maxMp+=4;
+    player.hp=player.maxHp;player.mp=player.maxMp;
+    pendingLevelUps++;
+    sfxLvl();
+    showNotify(`⬆️ 레벨 ${player.level} 달성!`);
+  }
+  if(pendingLevelUps>0)openLevelUp();
+}
+function openLevelUp(){
+  state='levelup';lvlPoints=pendingLevelUps*3;pendingLevelUps=0;lvlCursor=0;
+  renderLevelUp();
+  document.getElementById('lvlPanel').style.display='flex';
+}
+function renderLevelUp(){
+  const box=document.getElementById('lvlBox');
+  const stats=[{key:'str',name:'힘 (공격력)',val:player.str},{key:'int',name:'지능 (마법력)',val:player.int},{key:'agi',name:'민첩 (회피/치명타)',val:player.agi},{key:'def',name:'방어 (방어력)',val:player.def}];
+  box.innerHTML=`<div class="panel-title">⬆️ 레벨 업! (포인트: ${lvlPoints})</div><div class="panel-hint">W/S: 이동 | E: 포인트 투자 | ESC: 완료</div>`;
+  stats.forEach((s,i)=>{
+    const row=document.createElement('div');
+    row.className='stat-row';
+    row.style.border=i===lvlCursor?'1px solid #FFD54F':'1px solid transparent';
+    row.style.borderRadius='6px';row.style.padding='6px 8px';
+    row.innerHTML=`<span class="sr-name">${s.name}</span><span class="sr-val">${s.val}</span><span style="color:#777;font-size:11px;margin-left:auto;">[E] +1</span>`;
+    box.appendChild(row);
+  });
+}
+function investStat(){
+  if(lvlPoints<=0)return;
+  const keys=['str','int','agi','def'];
+  player[keys[lvlCursor]]++;lvlPoints--;
+  if(lvlPoints<=0){closeLevelUp();}
+  else renderLevelUp();
+}
+function closeLevelUp(){
+  document.getElementById('lvlPanel').style.display='none';
+  state='explore';
+}
+
+// ===== INVENTORY =====
+function openInv(){state='inventory';invCursor=0;renderInv();document.getElementById('invPanel').style.display='flex';}
+function closeInv(){document.getElementById('invPanel').style.display='none';state='explore';}
+function renderInv(){
+  const box=document.getElementById('invBox');
+  box.innerHTML=`<div class="panel-title">🎒 인벤토리</div><div class="panel-hint">W/S: 이동 | E: 사용/장착 | Q: 버리기 | ESC: 닫기</div>`;
+  // Show equipped
+  box.innerHTML+=`<div style="color:#999;font-size:11px;margin:4px 0;">장착: ${equip.weapon?equip.weapon.emoji+equip.weapon.name:'없음'} | ${equip.armor?equip.armor.emoji+equip.armor.name:'없음'}</div>`;
+  if(inv.length===0){box.innerHTML+='<div style="color:#666;text-align:center;padding:20px;">비어있음</div>';return;}
+  inv.forEach((it,i)=>{
+    const row=document.createElement('div');
+    row.className='item-row'+(i===invCursor?' sel':'');
+    const eqText=(equip.weapon===it||equip.armor===it)?'<span class="it-eq">[장착중]</span>':'';
+    row.innerHTML=`<span class="it-emoji">${it.emoji}</span><div class="it-info"><div class="it-name">${it.name}${eqText}</div><div class="it-desc">${it.desc||''}</div></div>`;
+    box.appendChild(row);
+  });
+}
+function useInvItem(){
+  const it=inv[invCursor];if(!it)return;
+  if(it.type==='potion'){
+    if(it.sub==='hp'){player.hp=Math.min(player.maxHp,player.hp+it.val);sfxHeal();showMsg(`🧪 체력 ${it.val} 회복!`);}
+    else if(it.sub==='mp'){player.mp=Math.min(player.maxMp,player.mp+it.val);sfxHeal();showMsg(`💙 마나 ${it.val} 회복!`);}
+    else if(it.sub==='cure'){showMsg('💚 상태이상 해제!');}
+    else if(it.sub==='full'){player.hp=player.maxHp;player.mp=player.maxMp;sfxHeal();showMsg('⭐ 완전 회복!');}
+    inv.splice(invCursor,1);invCursor=Math.min(invCursor,inv.length-1);
+  }else if(it.type==='weapon'){
+    if(it.classKey&&it.classKey!==player.classKey){showMsg('❌ 이 직업은 장착할 수 없다!');return;}
+    equip.weapon=(equip.weapon===it?null:it);sfxChest();showMsg(equip.weapon===it?`${it.name} 장착!`:'장착 해제');
+  }else if(it.type==='armor'){
+    if(it.classKey&&it.classKey!==player.classKey){showMsg('❌ 이 직업은 장착할 수 없다!');return;}
+    equip.armor=(equip.armor===it?null:it);sfxChest();showMsg(equip.armor===it?`${it.name} 장착!`:'장착 해제');
+  }
+  renderInv();
+}
+function dropInvItem(){
+  const it=inv[invCursor];if(!it)return;
+  if(equip.weapon===it)equip.weapon=null;
+  if(equip.armor===it)equip.armor=null;
+  inv.splice(invCursor,1);invCursor=Math.min(invCursor,Math.max(0,inv.length-1));
+  showMsg('버렸다.');renderInv();
+}
+
+// ===== SHOP =====
+function openShop(){
+  state='shop';shopCursor=0;
+  shopItems=[...POTIONS];
+  const weaps=genWeapons(floor);
+  const arms=genArmors(floor);
+  const ci=player.classIdx;
+  shopItems.push(weaps[ci],arms[ci]);
+  renderShop();
+  document.getElementById('shopPanel').style.display='flex';
+}
+function closeShop(){document.getElementById('shopPanel').style.display='none';state='explore';}
+function renderShop(){
+  const box=document.getElementById('shopBox');
+  box.innerHTML=`<div class="panel-title">🏪 상점 (💰${player.gold})</div><div class="panel-hint">W/S: 이동 | E: 구매 | ESC: 닫기</div>`;
+  shopItems.forEach((it,i)=>{
+    const canBuy=player.gold>=it.price;
+    const row=document.createElement('div');
+    row.className='item-row'+(i===shopCursor?' sel':'');
+    if(!canBuy)row.style.opacity='0.4';
+    row.innerHTML=`<span class="it-emoji">${it.emoji}</span><div class="it-info"><div class="it-name">${it.name}</div><div class="it-desc">${it.desc||''}</div></div><span class="it-price">💰${it.price}</span>`;
+    box.appendChild(row);
+  });
+}
+function buyItem(){
+  const it=shopItems[shopCursor];if(!it)return;
+  if(player.gold<it.price){showMsg('💰 골드가 부족하다!');return;}
+  if(inv.length>=20){showMsg('🎒 인벤토리가 가득 찼다!');return;}
+  player.gold-=it.price;
+  inv.push({...it});sfxShop();showMsg(`${it.emoji} ${it.name} 구매!`);
+  renderShop();
+}
+
+// ===== EXPLORE =====
+function tryMove(dx,dy){
+  if(state!=='explore')return;
+  const nx=px+dx,ny=py+dy;
+  if(nx<0||nx>=MAP_S||ny<0||ny>=MAP_S)return;
+  if(map[ny][nx]===TW)return;
+  sfxStep();
+  px=nx;py=ny;
+  pdir=dy>0?0:dy<0?3:dx>0?2:1;
+  revealAround(px,py);
+
+  // Tile events
+  const tile=map[py][px];
+  if(tile===TM){map[py][px]=TF;startBattle();}
+  else if(tile===TC){map[py][px]=TF;openChest();}
+  else if(tile===TT){
+    map[py][px]=TF;
+    const dmg=5+floor;player.hp=Math.max(1,player.hp-dmg);
+    sfxHit();showMsg(`⚠️ 함정! ${dmg} 데미지!`);
+  }
+  else if(tile===TH){map[py][px]=TF;player.hp=player.maxHp;player.mp=player.maxMp;sfxHeal();showMsg('⛲ 샘물! HP/MP 완전 회복!');}
+  else if(tile===TSH){openShop();}
+  else if(tile===TS){nextFloor();}
+}
+
+function openChest(){
+  sfxChest();
+  const r=Math.random();
+  if(r<0.4){
+    const gold=10+floor*3+Math.floor(Math.random()*floor*2);
+    player.gold+=gold;showMsg(`📦 보물상자! +${gold}G`);
+  }else if(r<0.7){
+    const pot=POTIONS[Math.floor(Math.random()*POTIONS.length)];
+    if(inv.length<20){inv.push({...pot});showMsg(`📦 ${pot.emoji} ${pot.name} 발견!`);}
+    else{showMsg('📦 인벤토리가 가득 차서 버렸다...');}
+  }else{
+    const weaps=genWeapons(floor);const arms=genArmors(floor);
+    const item=Math.random()<0.5?weaps[player.classIdx]:arms[player.classIdx];
+    if(inv.length<20){inv.push({...item});showMsg(`📦 ${item.emoji} ${item.name} 발견!`);}
+    else{showMsg('📦 인벤토리가 가득 차서 버렸다...');}
+  }
+}
+
+function nextFloor(){
+  floor++;
+  if(floor>100){
+    state='victory';
+    document.getElementById('victory').style.display='flex';
+    document.getElementById('vicLvl').textContent=`최종 레벨: ${player.level}`;
+    return;
+  }
+  sfxStairs();
+  showNotify(`🏰 ${floor}층 도착!`);
+  // Boss floor warning
+  if(floor%10===0)setTimeout(()=>showNotify('⚠️ 보스 층!'),800);
+  genMap();
+  // Boss floor: force a boss encounter at stairs position? No, boss is in monster pool.
+  // On boss floor, place boss as TM near stairs
+  if(floor%10===0){
+    const stx=px,sty=py;
+    // Find a floor tile near stairs for boss
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(dx===0&&dy===0)continue;
+      const nx2=stx+dx,ny2=sty+dy;
+      if(nx2>=0&&nx2<MAP_S&&ny2>=0&&ny2<MAP_S&&map[ny2][nx2]===TF){
+        map[ny2][nx2]=TM;return;
+      }
+    }
+  }
+}
+
+// ===== RENDER =====
+function drawTile(tx,ty,sx,sy){
+  const s=T;
+  if(!mapRevealed[ty]?.[tx]){c.fillStyle='#0a0a14';c.fillRect(sx,sy,s,s);return;}
+  const tile=map[ty][tx];
+  switch(tile){
+    case TW:c.fillStyle='#1a1a2e';c.fillRect(sx,sy,s,s);
+      c.fillStyle='#222240';c.fillRect(sx+1,sy+1,s-2,s-2);
+      // Brick pattern
+      c.strokeStyle='#181830';c.lineWidth=0.5;
+      c.beginPath();c.moveTo(sx,sy+s/2);c.lineTo(sx+s,sy+s/2);c.stroke();
+      c.beginPath();c.moveTo(sx+s/2,sy);c.lineTo(sx+s/2,sy+s/2);c.stroke();
+      c.beginPath();c.moveTo(sx,sy+s/2);c.lineTo(sx,sy+s);c.stroke();
+      break;
+    case TF:c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      if((tx+ty)%2===0){c.fillStyle='rgba(255,255,255,0.02)';c.fillRect(sx,sy,s,s);}
+      // Stone pattern
+      c.fillStyle='rgba(255,255,255,0.015)';
+      c.beginPath();c.arc(sx+s*0.3,sy+s*0.7,2,0,Math.PI*2);c.fill();
+      break;
+    case TS:c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      // Stairs
+      c.fillStyle='#4527A0';c.fillRect(sx+4,sy+4,s-8,s-8);
+      c.fillStyle='#7E57C2';
+      for(let i=0;i<4;i++)c.fillRect(sx+6+i*2,sy+6+i*6,s-12-i*4,4);
+      c.fillStyle='#B39DDB';c.font='16px serif';c.textAlign='center';c.fillText('▲',sx+s/2,sy+s/2+5);c.textAlign='left';
+      break;
+    case TC:c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      c.fillStyle='#8D6E63';c.fillRect(sx+8,sy+12,s-16,s-18);
+      c.fillStyle='#A1887F';c.fillRect(sx+7,sy+8,s-14,6);
+      c.fillStyle='#FFD54F';c.beginPath();c.arc(sx+s/2,sy+14,2.5,0,Math.PI*2);c.fill();
+      break;
+    case TSH:c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      c.font='22px serif';c.textAlign='center';c.fillText('🏪',sx+s/2,sy+s/2+7);c.textAlign='left';
+      break;
+    case TT:// Hidden trap looks like floor
+      c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      if((tx+ty)%2===0){c.fillStyle='rgba(255,255,255,0.02)';c.fillRect(sx,sy,s,s);}
+      break;
+    case TH:c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      c.fillStyle='rgba(100,181,246,0.15)';c.fillRect(sx,sy,s,s);
+      c.font='20px serif';c.textAlign='center';c.fillText('⛲',sx+s/2,sy+s/2+7);c.textAlign='left';
+      break;
+    case TM:c.fillStyle='#2a2a3e';c.fillRect(sx,sy,s,s);
+      c.fillStyle='rgba(239,83,80,0.08)';c.fillRect(sx,sy,s,s);
+      // Shadowy figure
+      c.fillStyle='rgba(239,83,80,0.4)';
+      c.beginPath();c.arc(sx+s/2,sy+s/2,6,0,Math.PI*2);c.fill();
+      c.fillStyle='rgba(239,83,80,0.2)';
+      c.beginPath();c.arc(sx+s/2,sy+s/2,10,0,Math.PI*2);c.fill();
+      break;
+  }
+}
+
+function drawPlayer(sx,sy){
+  const s=T,cx2=sx+s/2,cy2=sy+s/2;
+  const bob=Math.sin(animFrame*0.15)*1.5;
+  // Shadow
+  c.fillStyle='rgba(0,0,0,0.3)';
+  c.beginPath();c.ellipse(cx2,cy2+16,8,3,0,0,Math.PI*2);c.fill();
+  // Body glow
+  const glow=c.createRadialGradient(cx2,cy2+bob,2,cx2,cy2+bob,20);
+  glow.addColorStop(0,'rgba(255,213,79,0.06)');glow.addColorStop(1,'rgba(255,213,79,0)');
+  c.fillStyle=glow;c.fillRect(sx-10,sy-10+bob,s+20,s+20);
+  // Character emoji
+  c.font='26px serif';c.textAlign='center';
+  c.fillText(player.classEmoji,cx2,cy2+8+bob);
+  c.textAlign='left';
+}
+
+function drawBattleScene(){
+  // Dark gradient bg
+  const bg=c.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0a0a1a');bg.addColorStop(0.5,'#1a1030');bg.addColorStop(1,'#0a0a14');
+  c.fillStyle=bg;c.fillRect(0,0,W,H);
+
+  // Floor pattern
+  c.fillStyle='rgba(255,255,255,0.02)';
+  for(let i=0;i<20;i++){
+    c.fillRect(i*50-10,H-100,40,100);
+  }
+
+  // Enemy
+  const ex=W/2,ey=H*0.35;
+  // Glow
+  const eg=c.createRadialGradient(ex,ey,5,ex,ey,60);
+  eg.addColorStop(0,enemy.isBoss?'rgba(239,83,80,0.12)':'rgba(200,150,255,0.08)');
+  eg.addColorStop(1,'rgba(0,0,0,0)');
+  c.fillStyle=eg;c.fillRect(ex-80,ey-80,160,160);
+  // Enemy shadow
+  c.fillStyle='rgba(0,0,0,0.3)';
+  c.beginPath();c.ellipse(ex,ey+40,25,8,0,0,Math.PI*2);c.fill();
+  // Enemy sprite
+  const eSize=enemy.isBoss?50:38;
+  c.font=`${eSize}px serif`;c.textAlign='center';
+  const eBob=Math.sin(animFrame*0.08)*3;
+  c.fillText(enemy.emoji,ex,ey+eBob+eSize/3);
+
+  // Player
+  const ppx=W/2,ppy=H*0.72;
+  c.fillStyle='rgba(0,0,0,0.3)';
+  c.beginPath();c.ellipse(ppx,ppy+25,20,6,0,0,Math.PI*2);c.fill();
+  c.font='36px serif';
+  const pBob=Math.sin(animFrame*0.12)*2;
+  c.fillText(player.classEmoji,ppx,ppy+pBob+12);
+  c.textAlign='left';
+
+  // Enemy info
+  const ei=document.getElementById('enemyInfo');
+  ei.innerHTML=`<div class="ei-name">${enemy.isBoss?'👑 ':''}${enemy.name} Lv.${Math.floor(floor*0.8+5)}</div>
+    <div class="ei-hp"><span class="ei-val">❤️</span><div class="ei-bar"><div class="ei-fill" style="width:${enemy.hp/enemy.maxHp*100}%"></div></div><span class="ei-val">${enemy.hp}/${enemy.maxHp}</span></div>`;
+}
+
+function renderBattle(){
+  const menu=document.getElementById('battleMenu');
+  const log=document.getElementById('battleLog');
+  log.textContent=bLog;
+
+  if(battleState==='menu'){
+    document.getElementById('skillSelect').style.display='none';
+    const opts=['⚔️공격','✨스킬','🧪아이템','🛡️방어','🏃도주'];
+    menu.innerHTML='';
+    opts.forEach((o,i)=>{
+      const btn=document.createElement('div');
+      btn.className='bm-btn'+(i===bCursor?' sel':'');
+      btn.innerHTML=`<span class="key">${i+1}</span> ${o}`;
+      menu.appendChild(btn);
+    });
+  }else if(battleState==='skill'){
+    const ss=document.getElementById('skillSelect');
+    ss.style.display='block';
+    ss.innerHTML='<div style="color:#FFD54F;font-size:13px;margin-bottom:6px;">W/S: 이동 | E: 사용 | ESC: 뒤로</div>';
+    player.skills.forEach((sk,i)=>{
+      const can=player.mp>=sk.cost;
+      const btn=document.createElement('div');
+      btn.className='sk-btn'+(i===bSkCursor?' sel':'')+(can?'':' disabled');
+      btn.innerHTML=`${sk.name} <span class="sk-cost">💎${sk.cost}</span><br><span style="font-size:10px;color:#999;">${sk.desc}</span>`;
+      ss.appendChild(btn);
+    });
+  }else if(battleState==='item'){
+    const ss=document.getElementById('skillSelect');
+    ss.style.display='block';
+    const pots=inv.map((it,i)=>({it,i})).filter(x=>x.it.type==='potion');
+    ss.innerHTML='<div style="color:#FFD54F;font-size:13px;margin-bottom:6px;">W/S: 이동 | E: 사용 | ESC: 뒤로</div>';
+    if(pots.length===0){ss.innerHTML+='<div style="color:#666;padding:10px;">포션이 없다!</div>';}
+    pots.forEach((p,i)=>{
+      const btn=document.createElement('div');
+      btn.className='sk-btn'+(i===bItCursor?' sel':'');
+      btn.innerHTML=`${p.it.emoji} ${p.it.name} <span style="color:#999;font-size:11px;">${p.it.desc}</span>`;
+      btn.dataset.idx=p.i;
+      ss.appendChild(btn);
+    });
+  }
+}
+
+function renderExplore(){
+  // BG
+  c.fillStyle='#0a0a14';c.fillRect(0,0,W,H);
+
+  // Camera
+  cam.x=px*T-W/2+T/2;cam.y=py*T-H/2+T/2;
+  cam.x=Math.max(0,Math.min(MAP_S*T-W,cam.x));
+  cam.y=Math.max(0,Math.min(MAP_S*T-H,cam.y));
+
+  // Tiles
+  const stx=Math.floor(cam.x/T),sty=Math.floor(cam.y/T);
+  const etx=Math.min(MAP_S,stx+Math.ceil(W/T)+2);
+  const ety=Math.min(MAP_S,sty+Math.ceil(H/T)+2);
+  for(let ty=sty;ty<ety;ty++)for(let tx=stx;tx<etx;tx++){
+    drawTile(tx,ty,tx*T-cam.x,ty*T-cam.y);
+  }
+
+  // Player
+  drawPlayer(px*T-cam.x,py*T-cam.y);
+
+  // Fog of war overlay
+  for(let ty=sty;ty<ety;ty++)for(let tx=stx;tx<etx;tx++){
+    if(!mapRevealed[ty]?.[tx]){
+      c.fillStyle='rgba(5,5,10,0.95)';
+      c.fillRect(tx*T-cam.x,ty*T-cam.y,T,T);
+    }
+  }
+
+  // Torch light around player
+  const plx=px*T-cam.x+T/2,ply=py*T-cam.y+T/2;
+  const lg=c.createRadialGradient(plx,ply,30,plx,ply,140);
+  lg.addColorStop(0,'rgba(0,0,0,0)');lg.addColorStop(1,'rgba(5,5,10,0.6)');
+  c.fillStyle=lg;c.fillRect(0,0,W,H);
+
+  // Minimap
+  drawMinimap();
+}
+
+function drawMinimap(){
+  const mc=document.getElementById('minimap');mc.style.display='block';
+  const mx=mc.getContext('2d');
+  const ms=100,sc=ms/MAP_S;
+  mx.fillStyle='#0a0a14';mx.fillRect(0,0,ms,ms);
+  for(let y=0;y<MAP_S;y++)for(let x=0;x<MAP_S;x++){
+    if(!mapRevealed[y][x])continue;
+    const t=map[y][x];
+    const colors={[TW]:'#1a1a2e',[TF]:'#3a3a50',[TS]:'#7E57C2',[TC]:'#FFD54F',[TSH]:'#66BB6A',[TT]:'#3a3a50',[TH]:'#42A5F5',[TM]:'#EF5350'};
+    mx.fillStyle=colors[t]||'#3a3a50';
+    mx.fillRect(x*sc,y*sc,Math.ceil(sc),Math.ceil(sc));
+  }
+  // Player
+  mx.fillStyle='#FFD54F';mx.fillRect(px*sc-1,py*sc-1,sc+2,sc+2);
+}
+
+// ===== HUD =====
+function updateHUD(){
+  document.getElementById('hpBar').style.width=(player.hp/player.maxHp*100)+'%';
+  document.getElementById('mpBar').style.width=(player.mp/player.maxMp*100)+'%';
+  document.getElementById('xpBar').style.width=(player.xp/player.xpNext*100)+'%';
+  document.getElementById('hpVal').textContent=`${player.hp}/${player.maxHp}`;
+  document.getElementById('mpVal').textContent=`${player.mp}/${player.maxMp}`;
+  document.getElementById('xpVal').textContent=`Lv.${player.level}`;
+  document.getElementById('floor-info').textContent=`🏰 ${floor}층`;
+  document.getElementById('pi-class').textContent=`${player.classEmoji} ${player.className}`;
+  document.getElementById('pi-gold').textContent=`💰 ${player.gold}`;
+  document.getElementById('pi-atk').textContent=`⚔️ ${player.str+(equip.weapon?equip.weapon.atk:0)}`;
+  document.getElementById('pi-def').textContent=`🛡️ ${player.def+(equip.armor?equip.armor.def:0)}`;
+
+  // Msg
+  const mb=document.getElementById('msgBox');
+  if(msgTimer>0){msgTimer--;mb.textContent=msgText;mb.classList.add('show');}
+  else mb.classList.remove('show');
+  // Notify
+  const ne=document.getElementById('notifyEl');
+  if(notTimer>0){notTimer--;ne.textContent=notText;ne.classList.add('show');}
+  else ne.classList.remove('show');
+}
+function showMsg(t){msgText=t;msgTimer=180;}
+function showNotify(t){notText=t;notTimer=120;}
+
+// ===== INPUT =====
+document.addEventListener('keydown',e=>{
+  if(state==='title'||state==='gameover'||state==='victory')return;
+
+  if(state==='classSelect'){
+    if(e.code==='ArrowLeft'||e.code==='KeyA'){selClassIdx=Math.max(0,selClassIdx-1);renderClassSelect();}
+    if(e.code==='ArrowRight'||e.code==='KeyD'){selClassIdx=Math.min(CLASSES.length-1,selClassIdx+1);renderClassSelect();}
+    if(e.code==='Enter'||e.code==='Space'||e.code==='KeyE'){confirmClass();}
+    return;
+  }
+
+  if(state==='levelup'){
+    e.preventDefault();
+    if(e.code==='ArrowUp'||e.code==='KeyW'){lvlCursor=Math.max(0,lvlCursor-1);renderLevelUp();}
+    if(e.code==='ArrowDown'||e.code==='KeyS'){lvlCursor=Math.min(3,lvlCursor+1);renderLevelUp();}
+    if(e.code==='KeyE'||e.code==='Enter'||e.code==='Space'){investStat();}
+    if(e.code==='Escape'){if(lvlPoints<=0)closeLevelUp();}
+    return;
+  }
+
+  if(state==='inventory'){
+    e.preventDefault();
+    if(e.code==='ArrowUp'||e.code==='KeyW'){invCursor=Math.max(0,invCursor-1);renderInv();}
+    if(e.code==='ArrowDown'||e.code==='KeyS'){invCursor=Math.min(inv.length-1,invCursor+1);renderInv();}
+    if(e.code==='KeyE'||e.code==='Enter'||e.code==='Space'){useInvItem();}
+    if(e.code==='KeyQ'){dropInvItem();}
+    if(e.code==='Escape'||e.code==='KeyI'){closeInv();}
+    return;
+  }
+
+  if(state==='shop'){
+    e.preventDefault();
+    if(e.code==='ArrowUp'||e.code==='KeyW'){shopCursor=Math.max(0,shopCursor-1);renderShop();}
+    if(e.code==='ArrowDown'||e.code==='KeyS'){shopCursor=Math.min(shopItems.length-1,shopCursor+1);renderShop();}
+    if(e.code==='KeyE'||e.code==='Enter'||e.code==='Space'){buyItem();}
+    if(e.code==='Escape'){closeShop();}
+    return;
+  }
+
+  if(state==='battle'){
+    e.preventDefault();
+    if(bTurn!=='player')return;
+
+    if(battleState==='menu'){
+      if(e.code==='ArrowLeft'||e.code==='KeyA'){bCursor=Math.max(0,bCursor-1);renderBattle();}
+      if(e.code==='ArrowRight'||e.code==='KeyD'){bCursor=Math.min(4,bCursor+1);renderBattle();}
+      if(e.code==='Digit1'){bCursor=0;doMenuAction();}
+      if(e.code==='Digit2'){bCursor=1;doMenuAction();}
+      if(e.code==='Digit3'){bCursor=2;doMenuAction();}
+      if(e.code==='Digit4'){bCursor=3;doMenuAction();}
+      if(e.code==='Digit5'){bCursor=4;doMenuAction();}
+      if(e.code==='KeyE'||e.code==='Enter'||e.code==='Space'){doMenuAction();}
+    }else if(battleState==='skill'){
+      if(e.code==='ArrowUp'||e.code==='KeyW'){bSkCursor=Math.max(0,bSkCursor-1);renderBattle();}
+      if(e.code==='ArrowDown'||e.code==='KeyS'){bSkCursor=Math.min(player.skills.length-1,bSkCursor+1);renderBattle();}
+      if(e.code==='KeyE'||e.code==='Enter'||e.code==='Space'){
+        const sk=player.skills[bSkCursor];
+        if(sk&&player.mp>=sk.cost)playerSkill(sk);
+      }
+      if(e.code==='Escape'){battleState='menu';bCursor=1;document.getElementById('skillSelect').style.display='none';renderBattle();}
+    }else if(battleState==='item'){
+      const pots=inv.map((it,i)=>({it,i})).filter(x=>x.it.type==='potion');
+      if(e.code==='ArrowUp'||e.code==='KeyW'){bItCursor=Math.max(0,bItCursor-1);renderBattle();}
+      if(e.code==='ArrowDown'||e.code==='KeyS'){bItCursor=Math.min(pots.length-1,bItCursor+1);renderBattle();}
+      if(e.code==='KeyE'||e.code==='Enter'||e.code==='Space'){
+        if(pots[bItCursor])playerUseItem(pots[bItCursor].it,pots[bItCursor].i);
+      }
+      if(e.code==='Escape'){battleState='menu';bCursor=2;document.getElementById('skillSelect').style.display='none';renderBattle();}
+    }
+    return;
+  }
+
+  if(state==='explore'){
+    if(e.code==='ArrowUp'||e.code==='KeyW')tryMove(0,-1);
+    if(e.code==='ArrowDown'||e.code==='KeyS')tryMove(0,1);
+    if(e.code==='ArrowLeft'||e.code==='KeyA')tryMove(-1,0);
+    if(e.code==='ArrowRight'||e.code==='KeyD')tryMove(1,0);
+    if(e.code==='KeyI'){e.preventDefault();openInv();}
+    if(e.code==='KeyM'){e.preventDefault();doSave();}
+  }
+});
+
+function doMenuAction(){
+  if(bCursor===0)playerAttack();
+  else if(bCursor===1){battleState='skill';bSkCursor=0;renderBattle();}
+  else if(bCursor===2){battleState='item';bItCursor=0;renderBattle();}
+  else if(bCursor===3){
+    // Defend: reduce damage this turn
+    buffs.push({stat:'def',val:Math.floor(player.def*0.5)+3,dur:1});
+    bLog='🛡️ 방어 태세!';bTurn='enemy';renderBattle();setTimeout(enemyTurn,700);
+  }
+  else if(bCursor===4)playerFlee();
+}
+
+// ===== SAVE/LOAD =====
+function doSave(){
+  const d={floor,px,py,player:{...player},inv:[...inv],equip:{weapon:equip.weapon?inv.indexOf(equip.weapon):-1,armor:equip.armor?inv.indexOf(equip.armor):-1},map,mapRevealed};
+  localStorage.setItem('darkTowerSave',JSON.stringify(d));
+  showMsg('💾 저장 완료!');
+}
+function doLoad(){
+  const raw=localStorage.getItem('darkTowerSave');if(!raw)return false;
+  try{
+    const d=JSON.parse(raw);
+    floor=d.floor;px=d.px;py=d.py;player={...d.player};inv=d.inv||[];
+    map=d.map;mapRevealed=d.mapRevealed;
+    equip.weapon=d.equip.weapon>=0?inv[d.equip.weapon]:null;
+    equip.armor=d.equip.armor>=0?inv[d.equip.armor]:null;
+    state='explore';
+    document.getElementById('title').style.display='none';
+    showMsg('💾 불러왔습니다!');
+    return true;
+  }catch(e){return false;}
+}
+function hasSave(){return !!localStorage.getItem('darkTowerSave');}
+
+// ===== CLASS SELECT =====
+let selClassIdx=0;
+function showClassSelect(){
+  ea();
+  document.getElementById('title').style.display='none';
+  document.getElementById('classSelect').style.display='flex';
+  state='classSelect';
+  selClassIdx=0;
+  renderClassSelect();
+}
+function renderClassSelect(){
+  const opts=document.getElementById('classOpts');
+  opts.innerHTML='';
+  CLASSES.forEach((cl,i)=>{
+    const card=document.createElement('div');
+    card.className='class-card'+(i===selClassIdx?' sel':'');
+    card.innerHTML=`<div class="emoji">${cl.emoji}</div><div class="cname">${cl.name}</div><div class="cdesc">${cl.desc.replace('\n','<br>')}</div><div class="cstats">HP:${cl.hp} MP:${cl.mp} 힘:${cl.str} 지:${cl.int} 민:${cl.agi} 방:${cl.def}</div>`;
+    card.onclick=()=>{selClassIdx=i;renderClassSelect();};
+    opts.appendChild(card);
+  });
+  document.getElementById('classConfirm').style.display='block';
+}
+function confirmClass(){
+  initPlayer(selClassIdx);
+  document.getElementById('classSelect').style.display='none';
+  floor=1;genMap();
+  state='explore';
+  showNotify('🏰 어둠의 탑에 입장했다...');
+}
+
+function goTitle(){
+  state='title';
+  document.getElementById('title').style.display='flex';
+  document.getElementById('gameover').style.display='none';
+  document.getElementById('victory').style.display='none';
+  document.getElementById('battleUI').style.display='none';
+  document.getElementById('skillSelect').style.display='none';
+  document.getElementById('minimap').style.display='none';
+  if(hasSave())document.getElementById('btnLoad').disabled=false;
+}
+
+// ===== MAIN LOOP =====
+function gameLoop(){
+  animFrame++;
+  if(state==='explore'){renderExplore();}
+  else if(state==='battle'){drawBattleScene();}
+  updateHUD();
+  playBGM();
+  requestAnimationFrame(gameLoop);
+}
+
+// Init
+if(hasSave())document.getElementById('btnLoad').disabled=false;
+gameLoop();
+</script>
+</body>
+</html>

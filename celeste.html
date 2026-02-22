@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Celeste - 산을 올라라</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0e0e1a;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh}
+canvas{image-rendering:pixelated;border-radius:8px;box-shadow:0 0 40px rgba(100,150,255,0.3)}
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+<script>
+// =================== 설정 ===================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const TILE = 8;
+const COLS = 50, ROWS = 38;
+const W = COLS*TILE, H = ROWS*TILE;
+const SCALE = 2;
+canvas.width = W; canvas.height = H;
+canvas.style.width = W*SCALE+'px'; canvas.style.height = H*SCALE+'px';
+// =================== 입력 ===================
+const keys = {};
+let clicked = false;
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+canvas.addEventListener('mousedown', () => { clicked = true; });
+canvas.addEventListener('mouseup', () => { clicked = false; });
+function kl(){ return keys['ArrowLeft']||keys['a']||keys['A']; }
+function kr(){ return keys['ArrowRight']||keys['d']||keys['D']; }
+function ku(){ return keys['ArrowUp']||keys['w']||keys['W']; }
+function kd(){ return keys['ArrowDown']||keys['s']||keys['S']; }
+function kj(){ return keys['c']||keys['C']||keys['z']||keys['Z']||keys[' ']; }
+function kda(){ return keys['x']||keys['X']||keys['Shift']; }
+
+// =================== 게임 상태 ===================
+let gameState = 'title'; // title, play, death, complete, chapter_select
+let chapter = 0;
+let deathCount = 0;
+let deathTimer = 0;
+let completeTimer = 0;
+let titleAlpha = 1;
+let frameCount = 0;
+
+// =================== 파티클 ===================
+let particles = [];
+function addParticle(x,y,col,count,spd){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2;
+    particles.push({x,y,vx:Math.cos(a)*spd*(0.5+Math.random()),vy:Math.sin(a)*spd*(0.5+Math.random()),life:1,col,size:1+Math.random()*2});
+  }
+}
+function addDashParticle(x,y){
+  for(let i=0;i<3;i++){
+    particles.push({x:x+Math.random()*6-3,y:y+Math.random()*6-3,vx:(Math.random()-0.5)*0.5,vy:(Math.random()-0.5)*0.5,life:1,col:'#88ccff',size:1+Math.random()});
+  }
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.life-=0.03;
+    p.vy+=0.02;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+function drawParticles(){
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.col;
+    ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);
+  });
+  ctx.globalAlpha=1;
+}
+
+// =================== 배경 눈 ===================
+let snowflakes = [];
+for(let i=0;i<60;i++) snowflakes.push({x:Math.random()*W,y:Math.random()*H,s:0.5+Math.random()*1.5,sp:0.2+Math.random()*0.5});
+function updateSnow(){
+  snowflakes.forEach(s=>{
+    s.y+=s.sp; s.x+=Math.sin(frameCount*0.01+s.y*0.1)*0.3;
+    if(s.y>H){s.y=-5;s.x=Math.random()*W;}
+  });
+}
+function drawSnow(){
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  snowflakes.forEach(s=>ctx.fillRect(s.x,s.y,s.s,s.s));
+}
+
+// =================== 플레이어 ===================
+const P = {
+  x:0,y:0,vx:0,vy:0,w:5,h:7,
+  onGround:false,
+  facing:1, // 1=right, -1=left
+  // 점프
+  jumpBuffer:0, coyoteTime:0, jumpHeld:false,
+  // 대쉬
+  dashLeft:1, dashing:false, dashTimer:0, dashDirX:0, dashDirY:0,
+  canDash:true,
+  // 벽타기
+  wallSliding:false, wallDir:0,
+  // 스태미나
+  stamina:110,
+  // 스프라이트 상태
+  animTimer:0, squish:0,
+  // 무적 (스프링 등)
+  invincible:0,
+  // 스폰
+  spawnX:0, spawnY:0,
+  // 헤어 트레일
+  hair:[],
+};
+
+const GRAV = 0.15;
+const MAX_FALL = 3;
+const WALL_SLIDE_SPD = 0.6;
+const RUN_SPD = 1.2;
+const JUMP_SPD = -2.8;
+const DASH_SPD = 3.5;
+const DASH_TIME = 8;
+const WALL_JUMP_X = 2.5;
+const WALL_JUMP_Y = -2.8;
+
+function resetPlayer(x, y) {
+  P.x=x; P.y=y; P.vx=0; P.vy=0;
+  P.onGround=false; P.dashing=false; P.dashTimer=0;
+  P.dashLeft=1; P.canDash=true; P.stamina=110;
+  P.jumpBuffer=0; P.coyoteTime=0; P.jumpHeld=false;
+  P.wallSliding=false; P.invincible=0;
+  P.spawnX=x; P.spawnY=y;
+  P.hair=[];
+  for(let i=0;i<5;i++) P.hair.push({x:x+P.w/2,y:y});
+}
+
+// =================== 레벨 데이터 ===================
+// 타일: 0=빈, 1=벽, 2=스파이크, 3=스프링, 4=이동발판, 5=딸기, 6=골(깃발), 7=부서지는발판, 8=대쉬리필(크리스탈), 9=구름(한번밟기)
+const LEVELS = [
+  // Chapter 1 - Forsaken City (입문)
+  {
+    name: "Forsaken City",
+    bg: '#1a1a2e',
+    bgCol2: '#16213e',
+    tileCol: '#3a506b',
+    tileCol2: '#2c3e50',
+    spawnX: 2, spawnY: 32,
+    map: (function(){
+      const m = [];
+      for(let r=0;r<ROWS;r++){
+        m[r]=[];
+        for(let c=0;c<COLS;c++) m[r][c]=0;
+      }
+      // 바닥
+      for(let c=0;c<COLS;c++){m[ROWS-1][c]=1;m[ROWS-2][c]=1;}
+      // 왼벽 오른벽
+      for(let r=0;r<ROWS;r++){m[r][0]=1;m[r][COLS-1]=1;}
+
+      // 플랫폼들 - 좌에서 우로, 아래에서 위로
+      // 1단계: 기본 점프
+      for(let c=5;c<10;c++) m[33][c]=1;
+      for(let c=13;c<18;c++) m[31][c]=1;
+      for(let c=20;c<24;c++) m[29][c]=1;
+
+      // 2단계: 위로 올라가기
+      for(let c=27;c<31;c++) m[27][c]=1;
+      for(let c=22;c<26;c++) m[24][c]=1;
+      for(let c=16;c<20;c++) m[22][c]=1;
+
+      // 3단계: 벽타기 구간
+      for(let r=14;r<22;r++) m[r][12]=1;
+      for(let r=14;r<18;r++) m[r][13]=1;
+      for(let c=14;c<19;c++) m[14][c]=1;
+
+      // 4단계: 스프링 & 위로
+      m[14][20]=3; // 스프링
+      for(let c=22;c<28;c++) m[10][c]=1;
+
+      // 5단계: 까다로운 점프
+      for(let c=30;c<34;c++) m[12][c]=1;
+      for(let c=36;c<40;c++) m[9][c]=1;
+
+      // 스파이크들
+      m[ROWS-3][10]=2; m[ROWS-3][11]=2; m[ROWS-3][12]=2;
+      m[28][25]=2; m[28][26]=2;
+      m[13][16]=2; m[13][17]=2;
+
+      // 딸기
+      m[30][15]=5;
+      m[23][24]=5;
+      m[9][25]=5;
+
+      // 대쉬 리필
+      m[19][12]=8;
+
+      // 부서지는 발판
+      m[26][16]=7; m[26][17]=7;
+
+      // 구름
+      m[16][30]=9; m[16][33]=9;
+
+      // 골
+      m[7][38]=6;
+
+      return m;
+    })()
+  },
+
+  // Chapter 2 - Old Site (벽타기 중심)
+  {
+    name: "Old Site",
+    bg: '#1a0a2e',
+    bgCol2: '#2d1b4e',
+    tileCol: '#5c3d6e',
+    tileCol2: '#4a2d5e',
+    spawnX: 2, spawnY: 33,
+    map: (function(){
+      const m = [];
+      for(let r=0;r<ROWS;r++){
+        m[r]=[];
+        for(let c=0;c<COLS;c++) m[r][c]=0;
+      }
+      // 바닥 & 벽
+      for(let c=0;c<COLS;c++){m[ROWS-1][c]=1;m[ROWS-2][c]=1;}
+      for(let r=0;r<ROWS;r++){m[r][0]=1;m[r][COLS-1]=1;}
+
+      // 수직 상승 구간 - 벽타기
+      for(let r=5;r<35;r++) m[r][8]=1;
+      for(let r=5;r<35;r++) m[r][9]=1;
+      for(let r=10;r<30;r++) m[r][15]=1;
+      for(let r=10;r<30;r++) m[r][16]=1;
+
+      // 플랫폼
+      for(let c=2;c<8;c++) m[34][c]=1;
+      for(let c=10;c<15;c++) m[30][c]=1;
+      for(let c=17;c<22;c++) m[26][c]=1;
+      for(let c=10;c<15;c++) m[22][c]=1;
+      for(let c=17;c<23;c++) m[18][c]=1;
+      for(let c=10;c<16;c++) m[14][c]=1;
+      for(let c=17;c<22;c++) m[10][c]=1;
+
+      // 이동 발판
+      m[23][30]=4; m[15][28]=4;
+
+      // 스파이크
+      for(let c=10;c<15;c++) m[29][c]=2;
+      for(let c=17;c<22;c++) m[25][c]=2;
+      m[21][12]=2; m[21][13]=2;
+
+      // 스프링
+      m[18][21]=3;
+
+      // 딸기
+      m[29][12]=5; m[17][20]=5; m[9][19]=5;
+
+      // 대쉬 리필
+      m[20][7]=8; m[12][16]=8;
+
+      // 부서지는 발판
+      m[26][24]=7; m[26][25]=7; m[26][26]=7;
+
+      // 구름
+      m[8][26]=9; m[8][30]=9; m[8][34]=9;
+
+      // 상단 플랫폼 & 골
+      for(let c=24;c<30;c++) m[5][c]=1;
+      for(let c=35;c<42;c++) m[5][c]=1;
+      m[4][40]=6;
+
+      return m;
+    })()
+  },
+
+  // Chapter 3 - Celestial Resort (이동발판 & 복합)
+  {
+    name: "Celestial Resort",
+    bg: '#0a1e0e',
+    bgCol2: '#1a3a1e',
+    tileCol: '#4a7a4e',
+    tileCol2: '#3a6a3e',
+    spawnX: 2, spawnY: 33,
+    map: (function(){
+      const m = [];
+      for(let r=0;r<ROWS;r++){
+        m[r]=[];
+        for(let c=0;c<COLS;c++) m[r][c]=0;
+      }
+      for(let c=0;c<COLS;c++){m[ROWS-1][c]=1;m[ROWS-2][c]=1;}
+      for(let r=0;r<ROWS;r++){m[r][0]=1;m[r][COLS-1]=1;}
+
+      // 복합 스테이지
+      for(let c=3;c<8;c++) m[34][c]=1;
+      // 스파이크 구간
+      m[ROWS-3][9]=2;m[ROWS-3][10]=2;m[ROWS-3][11]=2;m[ROWS-3][12]=2;
+      for(let c=13;c<17;c++) m[34][c]=1;
+
+      // 이동발판 구간
+      m[30][10]=4; m[26][14]=4; m[22][10]=4;
+
+      // 벽 구간
+      for(let r=15;r<30;r++) m[r][20]=1;
+      for(let r=15;r<30;r++) m[r][21]=1;
+      for(let r=10;r<25;r++) m[r][28]=1;
+      for(let r=10;r<25;r++) m[r][29]=1;
+
+      // 상단
+      for(let c=22;c<28;c++) m[15][c]=1;
+      for(let c=30;c<36;c++) m[12][c]=1;
+      for(let c=22;c<28;c++) m[9][c]=1;
+
+      // 스프링 체인
+      m[15][26]=3;
+      m[9][26]=3;
+
+      // 스파이크
+      for(let c=22;c<28;c++) m[14][c]=2;
+      m[11][32]=2;m[11][33]=2;
+      m[8][24]=2;m[8][25]=2;
+
+      // 구름
+      m[20][35]=9; m[17][38]=9; m[14][41]=9;
+
+      // 딸기
+      m[33][15]=5; m[25][14]=5; m[14][24]=5; m[8][34]=5;
+
+      // 대쉬 리필
+      m[27][15]=8; m[18][25]=8;
+
+      // 부서지는 발판
+      m[30][24]=7;m[30][25]=7;m[30][26]=7;
+
+      // 골
+      for(let c=38;c<45;c++) m[5][c]=1;
+      m[4][42]=6;
+
+      return m;
+    })()
+  },
+
+  // Chapter 4 - Golden Ridge (하늘)
+  {
+    name: "Golden Ridge",
+    bg: '#2e1a0a',
+    bgCol2: '#4e3a1a',
+    tileCol: '#8a7a4a',
+    tileCol2: '#7a6a3a',
+    spawnX: 2, spawnY: 33,
+    map: (function(){
+      const m = [];
+      for(let r=0;r<ROWS;r++){
+        m[r]=[];
+        for(let c=0;c<COLS;c++) m[r][c]=0;
+      }
+      for(let c=0;c<COLS;c++){m[ROWS-1][c]=1;m[ROWS-2][c]=1;}
+      for(let r=0;r<ROWS;r++){m[r][0]=1;m[r][COLS-1]=1;}
+
+      // 긴 점프 구간 (구름 활용)
+      for(let c=3;c<7;c++) m[34][c]=1;
+      m[31][10]=9; m[28][14]=9; m[25][18]=9;
+      for(let c=21;c<25;c++) m[23][c]=1;
+
+      // 수직 벽타기 구간
+      for(let r=8;r<23;r++) m[r][26]=1;
+      for(let r=8;r<23;r++) m[r][27]=1;
+
+      // 대쉬 리필 공중
+      m[16][30]=8; m[12][34]=8;
+
+      // 구름 징검다리
+      m[18][31]=9; m[15][35]=9; m[12][39]=9;
+
+      // 스파이크
+      for(let c=21;c<25;c++) m[22][c]=2;
+      m[17][32]=2;
+
+      // 스프링
+      m[23][24]=3;
+
+      // 이동발판
+      m[20][35]=4; m[10][42]=4;
+
+      // 딸기
+      m[30][11]=5; m[24][23]=5; m[14][37]=5;
+
+      // 부서지는 발판
+      m[28][8]=7;m[28][9]=7;
+
+      // 상단 & 골
+      for(let c=40;c<48;c++) m[6][c]=1;
+      m[5][45]=6;
+
+      return m;
+    })()
+  },
+
+  // Chapter 5 - Summit (최종)
+  {
+    name: "The Summit",
+    bg: '#0a0a2e',
+    bgCol2: '#0a1a4e',
+    tileCol: '#5a7aaa',
+    tileCol2: '#4a6a9a',
+    spawnX: 2, spawnY: 33,
+    map: (function(){
+      const m = [];
+      for(let r=0;r<ROWS;r++){
+        m[r]=[];
+        for(let c=0;c<COLS;c++) m[r][c]=0;
+      }
+      for(let c=0;c<COLS;c++){m[ROWS-1][c]=1;m[ROWS-2][c]=1;}
+      for(let r=0;r<ROWS;r++){m[r][0]=1;m[r][COLS-1]=1;}
+
+      // 총력전 - 모든 기믹 혼합
+      for(let c=3;c<7;c++) m[34][c]=1;
+
+      // 스파이크 바닥
+      for(let c=7;c<15;c++) m[ROWS-3][c]=2;
+
+      // 이동발판 체인
+      m[32][9]=4; m[28][13]=4;
+      for(let c=16;c<20;c++) m[26][c]=1;
+
+      // 벽 구간
+      for(let r=12;r<26;r++) m[r][22]=1;
+      for(let r=12;r<26;r++) m[r][23]=1;
+
+      // 스파이크 벽
+      for(let r=14;r<24;r++) m[r][21]=2;
+
+      // 스프링 + 구름
+      m[26][19]=3;
+      m[18][26]=9; m[15][30]=9;
+      m[12][26]=9;
+
+      // 대쉬리필
+      m[20][28]=8; m[10][33]=8;
+
+      // 부서지는 + 스파이크
+      m[16][34]=7;m[16][35]=7;m[16][36]=7;
+      m[17][34]=2;m[17][35]=2;m[17][36]=2;
+
+      // 이동발판
+      m[13][38]=4;
+
+      // 최종 구간
+      for(let r=4;r<12;r++) m[r][40]=1;
+      for(let r=4;r<12;r++) m[r][41]=1;
+      for(let c=34;c<40;c++) m[8][c]=1;
+      m[8][38]=3;
+
+      // 딸기
+      m[33][5]=5; m[25][18]=5; m[17][28]=5; m[11][35]=5;
+
+      // 골
+      for(let c=42;c<48;c++) m[3][c]=1;
+      m[2][45]=6;
+
+      return m;
+    })()
+  },
+];
+
+let currentLevel = null;
+let levelObjects = []; // 동적 오브젝트 (이동발판, 부서지는발판 등)
+let strawberries = []; // 딸기 수집 상태
+let totalStrawberries = 0;
+
+// =================== 레벨 로드 ===================
+function loadLevel(idx) {
+  chapter = idx;
+  currentLevel = LEVELS[idx];
+  levelObjects = [];
+  strawberries = [];
+  totalStrawberries = 0;
+
+  // 동적 오브젝트 생성
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const t = currentLevel.map[r][c];
+      if(t===4) { // 이동발판
+        levelObjects.push({type:'moving',x:c*TILE,y:r*TILE,w:TILE*2,h:TILE,
+          startX:c*TILE,startY:r*TILE,range:40,speed:0.5,dir:1,axis:'x',or:r,oc:c});
+      }
+      if(t===7) { // 부서지는 발판
+        levelObjects.push({type:'crumble',x:c*TILE,y:r*TILE,w:TILE,h:TILE,
+          timer:0,broken:false,respawn:0,or:r,oc:c});
+      }
+      if(t===9) { // 구름
+        levelObjects.push({type:'cloud',x:c*TILE,y:r*TILE,w:TILE*2,h:TILE,
+          used:false,timer:0,or:r,oc:c});
+      }
+      if(t===5) { // 딸기
+        strawberries.push({x:c*TILE+TILE/2,y:r*TILE+TILE/2,collected:false,or:r,oc:c,float:0});
+        totalStrawberries++;
+      }
+    }
+  }
+
+  resetPlayer(currentLevel.spawnX*TILE, currentLevel.spawnY*TILE);
+  deathTimer=0;
+  particles=[];
+}
+
+// =================== 충돌 ===================
+function tileAt(px,py) {
+  const c=Math.floor(px/TILE), r=Math.floor(py/TILE);
+  if(r<0||r>=ROWS||c<0||c>=COLS) return 1;
+  return currentLevel.map[r][c];
+}
+
+function isSolid(px,py) {
+  const t = tileAt(px,py);
+  return t===1;
+}
+
+function isSpike(px,py) {
+  return tileAt(px,py)===2;
+}
+
+function isSpring(px,py) {
+  return tileAt(px,py)===3;
+}
+
+function isDashRefill(px,py) {
+  return tileAt(px,py)===8;
+}
+
+function isGoal(px,py) {
+  return tileAt(px,py)===6;
+}
+
+function solidAt(x,y,w,h) {
+  // 타일 충돌
+  for(let px=x;px<x+w;px+=TILE/2){
+    for(let py=y;py<y+h;py+=TILE/2){
+      if(isSolid(px,py)) return true;
+    }
+  }
+  if(isSolid(x+w-0.5,y)||isSolid(x+w-0.5,y+h-0.5)||isSolid(x,y+h-0.5)) return true;
+
+  // 동적 오브젝트 충돌
+  for(const obj of levelObjects){
+    if(obj.type==='moving'){
+      if(rectOverlap(x,y,w,h,obj.x,obj.y,obj.w,obj.h)) return true;
+    }
+    if(obj.type==='crumble' && !obj.broken){
+      if(rectOverlap(x,y,w,h,obj.x,obj.y,obj.w,obj.h)) return true;
+    }
+    if(obj.type==='cloud' && !obj.used){
+      if(rectOverlap(x,y,w,h,obj.x,obj.y,obj.w,obj.h)) return true;
+    }
+  }
+  return false;
+}
+
+function rectOverlap(x1,y1,w1,h1,x2,y2,w2,h2){
+  return x1<x2+w2 && x1+w1>x2 && y1<y2+h2 && y1+h1>y2;
+}
+
+function checkSpikes(){
+  for(let px=P.x;px<=P.x+P.w;px+=2){
+    for(let py=P.y;py<=P.y+P.h;py+=2){
+      if(isSpike(px,py)) return true;
+    }
+  }
+  return false;
+}
+
+// =================== 플레이어 업데이트 ===================
+let jumpPressed = false;
+let dashPressed = false;
+
+function updatePlayer() {
+  if(P.invincible>0) P.invincible--;
+
+  // -- 대쉬 --
+  if(P.dashing) {
+    P.dashTimer--;
+    P.vx = P.dashDirX * DASH_SPD;
+    P.vy = P.dashDirY * DASH_SPD;
+    addDashParticle(P.x+P.w/2, P.y+P.h/2);
+    if(P.dashTimer<=0) {
+      P.dashing = false;
+      if(P.vy<0) P.vy *= 0.5;
+      if(P.vx !== 0) P.vx *= 0.7;
+    }
+  } else {
+    // -- 이동 --
+    const accel = P.onGround ? 0.6 : 0.4;
+    const fric = P.onGround ? 0.8 : 0.9;
+
+    if(kl()) { P.vx -= accel; P.facing = -1; }
+    else if(kr()) { P.vx += accel; P.facing = 1; }
+    else P.vx *= fric;
+
+    P.vx = Math.max(-RUN_SPD, Math.min(RUN_SPD, P.vx));
+
+    // -- 중력 --
+    P.vy += GRAV;
+
+    // 벽 슬라이드
+    P.wallSliding = false;
+    P.wallDir = 0;
+    if(!P.onGround && P.vy > 0) {
+      if(kl() && solidAt(P.x-1,P.y,P.w,P.h)) { P.wallSliding=true; P.wallDir=-1; }
+      if(kr() && solidAt(P.x+1,P.y,P.w,P.h)) { P.wallSliding=true; P.wallDir=1; }
+    }
+    if(P.wallSliding) {
+      P.vy = Math.min(P.vy, WALL_SLIDE_SPD);
+      P.stamina -= 0.5;
+      if(P.stamina<=0) P.wallSliding=false;
+    }
+
+    P.vy = Math.min(P.vy, MAX_FALL);
+  }
+
+  // -- 점프 --
+  if(kj() && !jumpPressed) {
+    jumpPressed = true;
+    P.jumpBuffer = 6;
+  }
+  if(!kj()) { jumpPressed=false; P.jumpHeld=false; }
+  if(P.jumpBuffer>0) P.jumpBuffer--;
+
+  // 코요테 타임
+  if(P.onGround) P.coyoteTime = 5;
+  if(P.coyoteTime>0) P.coyoteTime--;
+
+  // 바닥 점프
+  if(P.jumpBuffer>0 && P.coyoteTime>0) {
+    P.vy = JUMP_SPD;
+    P.jumpBuffer=0; P.coyoteTime=0; P.jumpHeld=true;
+    P.squish=3;
+    addParticle(P.x+P.w/2,P.y+P.h,'#fff',5,1);
+  }
+
+  // 벽 점프
+  if(P.jumpBuffer>0 && P.wallSliding) {
+    P.vx = -P.wallDir * WALL_JUMP_X;
+    P.vy = WALL_JUMP_Y;
+    P.jumpBuffer=0; P.jumpHeld=true;
+    P.facing = -P.wallDir;
+    P.stamina = Math.min(110, P.stamina+20);
+    addParticle(P.x+(P.wallDir>0?P.w:0),P.y+P.h/2,'#fff',5,1.5);
+  }
+
+  // 가변 점프 높이
+  if(!P.jumpHeld && !kj() && P.vy<-1) {
+    P.vy *= 0.5;
+  }
+  if(kj()) P.jumpHeld = true;
+
+  // -- 대쉬 시작 --
+  if(kda() && !dashPressed && P.dashLeft>0 && !P.dashing) {
+    dashPressed = true;
+    P.dashing = true;
+    P.dashTimer = DASH_TIME;
+    P.dashLeft--;
+
+    let dx = 0, dy = 0;
+    if(kl()) dx=-1; else if(kr()) dx=1;
+    if(ku()) dy=-1; else if(kd()) dy=1;
+    if(dx===0 && dy===0) dx=P.facing;
+
+    const len = Math.sqrt(dx*dx+dy*dy);
+    P.dashDirX = dx/len;
+    P.dashDirY = dy/len;
+
+    P.vy = 0;
+    addParticle(P.x+P.w/2,P.y+P.h/2,'#88ccff',10,2);
+  }
+  if(!kda()) dashPressed=false;
+
+  // -- 이동 적용 --
+  // X축
+  let newX = P.x + P.vx;
+  if(!solidAt(newX, P.y, P.w, P.h)) {
+    P.x = newX;
+  } else {
+    // 벽에 맞춰 밀기
+    if(P.vx>0) { P.x = Math.floor((P.x+P.w)/TILE)*TILE-P.w-0.01; }
+    else if(P.vx<0) { P.x = Math.ceil(P.x/TILE)*TILE+0.01; }
+    P.vx = 0;
+  }
+
+  // Y축
+  let newY = P.y + P.vy;
+  P.onGround = false;
+  if(!solidAt(P.x, newY, P.w, P.h)) {
+    P.y = newY;
+  } else {
+    if(P.vy>0) {
+      P.y = Math.floor((P.y+P.h)/TILE)*TILE-P.h-0.01;
+      P.onGround = true;
+      P.dashLeft = 1;
+      P.canDash = true;
+      P.stamina = 110;
+      P.squish = 2;
+    } else if(P.vy<0) {
+      P.y = Math.ceil(P.y/TILE)*TILE+0.01;
+    }
+    P.vy = 0;
+  }
+
+  // -- 동적 오브젝트 상호작용 --
+  for(const obj of levelObjects){
+    if(obj.type==='moving'){
+      // 위에 서있으면 같이 이동
+      if(P.onGround && P.y+P.h>=obj.y-2 && P.y+P.h<=obj.y+4 && P.x+P.w>obj.x && P.x<obj.x+obj.w){
+        P.x += obj.velX||0;
+      }
+    }
+    if(obj.type==='crumble' && !obj.broken){
+      if(P.onGround && P.y+P.h>=obj.y-2 && P.y+P.h<=obj.y+4 && P.x+P.w>obj.x && P.x<obj.x+obj.w){
+        obj.timer++;
+        if(obj.timer>20) {
+          obj.broken=true;
+          obj.respawn=120;
+          addParticle(obj.x+TILE/2,obj.y+TILE/2,'#aaa',8,1.5);
+        }
+      }
+    }
+    if(obj.type==='cloud' && !obj.used){
+      if(P.vy>0 && P.y+P.h>=obj.y && P.y+P.h<=obj.y+6 && P.x+P.w>obj.x && P.x<obj.x+obj.w){
+        P.y = obj.y-P.h;
+        P.vy = 0;
+        P.onGround = true;
+        P.dashLeft = 1; P.stamina = 110;
+        obj.used = true;
+        obj.timer = 90;
+      }
+    }
+  }
+
+  // -- 스프링 체크 --
+  for(let px=P.x;px<=P.x+P.w;px+=2){
+    if(isSpring(px,P.y+P.h+1) && P.vy>=0) {
+      P.vy = -4.5;
+      P.dashLeft = 1;
+      P.squish = 4;
+      addParticle(P.x+P.w/2,P.y+P.h,'#ff0',8,2);
+      break;
+    }
+  }
+
+  // -- 대쉬 리필 --
+  for(let px=P.x;px<=P.x+P.w;px+=3){
+    for(let py=P.y;py<=P.y+P.h;py+=3){
+      if(isDashRefill(px,py)){
+        if(P.dashLeft<1){
+          P.dashLeft=1;
+          addParticle(px,py,'#88ffcc',8,1.5);
+          // 일시적으로 제거
+          const c=Math.floor(px/TILE),r=Math.floor(py/TILE);
+          currentLevel.map[r][c]=0;
+          setTimeout(()=>{currentLevel.map[r][c]=8;},3000);
+        }
+      }
+    }
+  }
+
+  // -- 딸기 수집 --
+  strawberries.forEach(s=>{
+    if(!s.collected){
+      const dx=P.x+P.w/2-s.x, dy=P.y+P.h/2-s.y;
+      if(Math.sqrt(dx*dx+dy*dy)<8){
+        s.collected=true;
+        addParticle(s.x,s.y,'#ff4466',12,2);
+      }
+    }
+  });
+
+  // -- 골 체크 --
+  for(let px=P.x;px<=P.x+P.w;px+=3){
+    for(let py=P.y;py<=P.y+P.h;py+=3){
+      if(isGoal(px,py)){
+        completeLevel();
+        return;
+      }
+    }
+  }
+
+  // -- 사망 체크 --
+  if(checkSpikes() && P.invincible<=0) { die(); return; }
+  if(P.y > H+20) { die(); return; }
+
+  // -- 헤어 트레일 --
+  const headX = P.x+P.w/2;
+  const headY = P.y+1;
+  P.hair.unshift({x:headX, y:headY});
+  if(P.hair.length>5) P.hair.pop();
+
+  P.animTimer++;
+  if(P.squish>0) P.squish-=0.5;
+}
+
+// =================== 사망 ===================
+function die() {
+  if(P.invincible>0) return;
+  deathCount++;
+  deathTimer = 30;
+  gameState = 'death';
+  addParticle(P.x+P.w/2, P.y+P.h/2, '#ff4466', 20, 3);
+  // 화면 흔들림
+  screenShake = 8;
+}
+
+let screenShake = 0;
+
+function respawn() {
+  resetPlayer(currentLevel.spawnX*TILE, currentLevel.spawnY*TILE);
+  // 오브젝트 리셋
+  levelObjects.forEach(obj=>{
+    if(obj.type==='crumble'){obj.broken=false;obj.timer=0;obj.respawn=0;}
+    if(obj.type==='cloud'){obj.used=false;obj.timer=0;}
+  });
+  // 딸기 리셋 (미수집)
+  strawberries.forEach(s=>s.collected=false);
+  gameState = 'play';
+}
+
+// =================== 레벨 클리어 ===================
+function completeLevel() {
+  gameState = 'complete';
+  completeTimer = 120;
+  addParticle(P.x+P.w/2, P.y+P.h/2, '#ffd700', 30, 3);
+}
+
+// =================== 동적 오브젝트 업데이트 ===================
+function updateObjects() {
+  levelObjects.forEach(obj=>{
+    if(obj.type==='moving'){
+      if(obj.axis==='x'){
+        obj.velX = obj.speed * obj.dir;
+        obj.x += obj.velX;
+        if(obj.x > obj.startX+obj.range || obj.x < obj.startX-obj.range) obj.dir*=-1;
+      } else {
+        obj.velY = obj.speed * obj.dir;
+        obj.y += obj.velY;
+        if(obj.y > obj.startY+obj.range || obj.y < obj.startY-obj.range) obj.dir*=-1;
+      }
+    }
+    if(obj.type==='crumble' && obj.broken){
+      obj.respawn--;
+      if(obj.respawn<=0){obj.broken=false;obj.timer=0;}
+    }
+    if(obj.type==='cloud' && obj.used){
+      obj.timer--;
+      if(obj.timer<=0){obj.used=false;}
+    }
+  });
+
+  // 딸기 떠다니기
+  strawberries.forEach(s=>{s.float+=0.05;});
+}
+
+// =================== 그리기 ===================
+function draw() {
+  // 배경
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, currentLevel.bg);
+  grad.addColorStop(1, currentLevel.bgCol2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  // 화면 흔들림
+  let sx=0,sy=0;
+  if(screenShake>0){
+    sx=(Math.random()-0.5)*screenShake;
+    sy=(Math.random()-0.5)*screenShake;
+    screenShake*=0.8;
+    if(screenShake<0.5)screenShake=0;
+  }
+  ctx.save();
+  ctx.translate(sx,sy);
+
+  // 배경 산
+  drawMountains();
+
+  // 눈
+  drawSnow();
+
+  // 타일
+  drawTiles();
+
+  // 동적 오브젝트
+  drawObjects();
+
+  // 딸기
+  drawStrawberries();
+
+  // 플레이어
+  if(gameState==='play' || gameState==='complete') drawPlayer();
+
+  // 파티클
+  drawParticles();
+
+  ctx.restore();
+
+  // UI
+  drawUI();
+}
+
+function drawMountains() {
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  for(let x=0;x<=W;x+=30){
+    ctx.lineTo(x, H-40-Math.sin(x*0.02+chapter)*30-Math.sin(x*0.05)*15);
+  }
+  ctx.lineTo(W,H);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  for(let x=0;x<=W;x+=20){
+    ctx.lineTo(x, H-70-Math.sin(x*0.015+2)*40-Math.cos(x*0.04)*20);
+  }
+  ctx.lineTo(W,H);
+  ctx.fill();
+}
+
+function drawTiles() {
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const t = currentLevel.map[r][c];
+      const x=c*TILE, y=r*TILE;
+
+      if(t===1){
+        // 벽
+        ctx.fillStyle = currentLevel.tileCol;
+        ctx.fillRect(x,y,TILE,TILE);
+        ctx.fillStyle = currentLevel.tileCol2;
+        ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
+        // 하이라이트
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.fillRect(x,y,TILE,1);
+        ctx.fillRect(x,y,1,TILE);
+      }
+      if(t===2){
+        // 스파이크
+        ctx.fillStyle = '#ff4466';
+        ctx.beginPath();
+        ctx.moveTo(x, y+TILE);
+        ctx.lineTo(x+TILE/2, y+2);
+        ctx.lineTo(x+TILE, y+TILE);
+        ctx.fill();
+        // 광택
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath();
+        ctx.moveTo(x+TILE/2-1, y+4);
+        ctx.lineTo(x+TILE/2, y+2);
+        ctx.lineTo(x+TILE/2+1, y+4);
+        ctx.fill();
+      }
+      if(t===3){
+        // 스프링
+        const bounce = Math.sin(frameCount*0.1)*1;
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(x+1,y+TILE-4+bounce,TILE-2,4);
+        ctx.fillStyle = '#ff8800';
+        ctx.fillRect(x+2,y+TILE-6+bounce,TILE-4,3);
+        ctx.fillStyle = '#666';
+        ctx.fillRect(x+1,y+TILE-2,TILE-2,2);
+      }
+      if(t===6){
+        // 골 깃발
+        const wave = Math.sin(frameCount*0.05)*2;
+        ctx.fillStyle = '#888';
+        ctx.fillRect(x+3,y,2,TILE);
+        ctx.fillStyle = '#ff4466';
+        ctx.beginPath();
+        ctx.moveTo(x+5,y+1);
+        ctx.lineTo(x+TILE+2,y+3+wave);
+        ctx.lineTo(x+5,y+6);
+        ctx.fill();
+      }
+      if(t===8){
+        // 대쉬 리필 크리스탈
+        const glow = Math.sin(frameCount*0.08)*2;
+        ctx.fillStyle = `rgba(100,255,200,${0.5+Math.sin(frameCount*0.08)*0.3})`;
+        ctx.beginPath();
+        ctx.moveTo(x+TILE/2, y+1+glow);
+        ctx.lineTo(x+TILE-1, y+TILE/2);
+        ctx.lineTo(x+TILE/2, y+TILE-1-glow);
+        ctx.lineTo(x+1, y+TILE/2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(200,255,230,0.8)';
+        ctx.fillRect(x+TILE/2-1,y+TILE/2-1,2,2);
+      }
+    }
+  }
+}
+
+function drawObjects() {
+  levelObjects.forEach(obj=>{
+    if(obj.type==='moving'){
+      ctx.fillStyle = '#7799bb';
+      ctx.fillRect(obj.x,obj.y,obj.w,obj.h);
+      ctx.fillStyle = '#99bbdd';
+      ctx.fillRect(obj.x+1,obj.y+1,obj.w-2,obj.h-2);
+      // 화살표
+      ctx.fillStyle = '#557799';
+      ctx.fillRect(obj.x+obj.w/2-2,obj.y+2,4,obj.h-4);
+    }
+    if(obj.type==='crumble' && !obj.broken){
+      const shake = obj.timer>10 ? (Math.random()-0.5)*2 : 0;
+      ctx.fillStyle = '#8a7a6a';
+      ctx.fillRect(obj.x+shake,obj.y,TILE,TILE);
+      ctx.fillStyle = '#9a8a7a';
+      ctx.fillRect(obj.x+1+shake,obj.y+1,TILE-2,TILE-2);
+      // 금 표시
+      if(obj.timer>0){
+        ctx.strokeStyle='rgba(255,100,100,0.5)';
+        ctx.lineWidth=0.5;
+        ctx.beginPath();
+        ctx.moveTo(obj.x+2,obj.y+2);
+        ctx.lineTo(obj.x+TILE-2,obj.y+TILE-2);
+        ctx.stroke();
+      }
+    }
+    if(obj.type==='cloud'){
+      const alpha = obj.used ? 0.2 : 0.7;
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(obj.x+obj.w/2, obj.y+obj.h/2, obj.w/2, obj.h/2, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+  });
+}
+
+function drawStrawberries() {
+  strawberries.forEach(s=>{
+    if(s.collected) return;
+    const by = Math.sin(s.float)*2;
+    ctx.fillStyle = '#ff4466';
+    // 몸체
+    ctx.beginPath();
+    ctx.arc(s.x, s.y+by, 3, 0, Math.PI*2);
+    ctx.fill();
+    // 잎
+    ctx.fillStyle = '#44cc44';
+    ctx.fillRect(s.x-1, s.y-4+by, 2, 2);
+    // 광택
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillRect(s.x-1, s.y-1+by, 1, 1);
+  });
+}
+
+function drawPlayer() {
+  // 헤어 (Celeste 특유의 머리카락 트레일)
+  const hairCol = P.dashLeft>0 ? '#e94560' : '#4488cc';
+  for(let i=P.hair.length-1;i>=0;i--){
+    const h = P.hair[i];
+    const size = 4 - i*0.5;
+    ctx.fillStyle = hairCol;
+    ctx.globalAlpha = 1-i*0.15;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, Math.max(1,size), 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 몸체
+  const squishX = P.squish>0 ? P.squish*0.3 : 0;
+  const squishY = P.squish>0 ? -P.squish*0.3 : 0;
+
+  // 대쉬 중 색 변경
+  if(P.dashing){
+    ctx.fillStyle = '#88ccff';
+  } else if(P.wallSliding){
+    ctx.fillStyle = '#ffcc88';
+  } else {
+    ctx.fillStyle = '#e94560';
+  }
+
+  // 몸
+  ctx.fillRect(P.x-squishX/2, P.y+squishY, P.w+squishX, P.h-squishY);
+
+  // 얼굴
+  ctx.fillStyle = '#ffd5d5';
+  ctx.fillRect(P.x+1, P.y+1+squishY, P.w-2, 3);
+
+  // 눈
+  ctx.fillStyle = '#222';
+  if(P.facing>0){
+    ctx.fillRect(P.x+3, P.y+2+squishY, 1, 1);
+  } else {
+    ctx.fillRect(P.x+1, P.y+2+squishY, 1, 1);
+  }
+}
+
+function drawUI() {
+  // 챕터명
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '8px monospace';
+  ctx.fillText(currentLevel.name, 4, 10);
+
+  // 사망 카운터
+  ctx.fillStyle = '#ff4466';
+  ctx.fillText('💀 '+deathCount, 4, 22);
+
+  // 딸기 카운터
+  const collected = strawberries.filter(s=>s.collected).length;
+  ctx.fillStyle = '#ff4466';
+  ctx.fillText('🍓 '+collected+'/'+totalStrawberries, 4, 34);
+
+  // 대쉬 표시
+  ctx.fillStyle = P.dashLeft>0 ? '#88ccff' : '#444';
+  ctx.fillRect(W-20, 4, 8, 8);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(W-20, 4, 8, 8);
+
+  // 스태미나 바 (벽타기 시)
+  if(P.wallSliding || P.stamina<110){
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(P.x-5, P.y-6, 15, 3);
+    ctx.fillStyle = P.stamina>30?'#66bb6a':'#ff4466';
+    ctx.fillRect(P.x-5, P.y-6, 15*(P.stamina/110), 3);
+  }
+}
+
+// =================== 타이틀 화면 ===================
+function drawTitle() {
+  // 배경
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, '#0a0a2e');
+  grad.addColorStop(0.5, '#1a1a4e');
+  grad.addColorStop(1, '#0e0e1a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  drawSnow();
+
+  // 산 실루엣
+  ctx.fillStyle = '#1a1a3e';
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  ctx.lineTo(50,120); ctx.lineTo(100,180); ctx.lineTo(150,100);
+  ctx.lineTo(200,80); ctx.lineTo(250,130); ctx.lineTo(300,90);
+  ctx.lineTo(350,110); ctx.lineTo(400,H);
+  ctx.fill();
+
+  ctx.fillStyle = '#151530';
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  ctx.lineTo(80,150); ctx.lineTo(160,200); ctx.lineTo(200,140);
+  ctx.lineTo(280,160); ctx.lineTo(350,130); ctx.lineTo(400,H);
+  ctx.fill();
+
+  // 타이틀
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 40px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('CELESTE', W/2, 100);
+
+  ctx.font = '10px monospace';
+  ctx.fillStyle = '#aaa';
+  ctx.fillText('산을 올라라', W/2, 120);
+
+  // 깜빡이는 텍스트
+  if(Math.floor(frameCount/30)%2===0){
+    ctx.fillStyle = '#88ccff';
+    ctx.font = '8px monospace';
+    ctx.fillText('클릭 또는 C/Z 키를 눌러 시작', W/2, 200);
+  }
+
+  ctx.textAlign = 'left';
+
+  // 조작법
+  ctx.fillStyle = '#666';
+  ctx.font = '6px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('← → 이동  |  C/Z 점프  |  X/Shift 대쉬', W/2, 260);
+  ctx.fillText('벽에 붙어서 점프 = 벽점프  |  방향+대쉬 = 8방향 대쉬', W/2, 272);
+  ctx.textAlign = 'left';
+}
+
+// =================== 챕터 선택 ===================
+function drawChapterSelect() {
+  ctx.fillStyle = '#0e0e1a';
+  ctx.fillRect(0,0,W,H);
+  drawSnow();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('챕터 선택', W/2, 30);
+
+  LEVELS.forEach((lv, i)=>{
+    const y = 55 + i*42;
+    const hover = false;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(60, y, W-120, 35);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(60, y, W-120, 35);
+
+    ctx.fillStyle = '#ffd93d';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Ch.${i+1}`, 70, y+15);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px monospace';
+    ctx.fillText(lv.name, 110, y+15);
+
+    ctx.fillStyle = '#888';
+    ctx.font = '7px monospace';
+    ctx.fillText(`[${i+1}번 키로 선택]`, 110, y+27);
+  });
+
+  ctx.textAlign = 'left';
+}
+
+// =================== 사망 화면 ===================
+function drawDeath() {
+  draw();
+  ctx.fillStyle = `rgba(255,50,50,${0.3-deathTimer*0.01})`;
+  ctx.fillRect(0,0,W,H);
+}
+
+// =================== 클리어 화면 ===================
+function drawComplete() {
+  draw();
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 20px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('챕터 클리어!', W/2, H/2-30);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '10px monospace';
+  const collected = strawberries.filter(s=>s.collected).length;
+  ctx.fillText(`🍓 ${collected}/${totalStrawberries}  💀 ${deathCount}`, W/2, H/2);
+
+  if(chapter < LEVELS.length-1){
+    if(Math.floor(frameCount/30)%2===0){
+      ctx.fillStyle = '#88ccff';
+      ctx.font = '8px monospace';
+      ctx.fillText('C키로 다음 챕터', W/2, H/2+30);
+    }
+  } else {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('정상 도달! 축하합니다!', W/2, H/2+30);
+    ctx.fillStyle = '#88ccff';
+    ctx.font = '8px monospace';
+    ctx.fillText('C키로 타이틀로', W/2, H/2+50);
+  }
+  ctx.textAlign = 'left';
+}
+
+// =================== 오디오 (간단한 효과음) ===================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function initAudio(){
+  if(!audioCtx) audioCtx = new AudioCtx();
+}
+
+function playSound(freq, dur, type='square', vol=0.1){
+  if(!audioCtx) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = vol;
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+dur);
+}
+
+// =================== 게임 루프 ===================
+function gameLoop() {
+  frameCount++;
+  updateSnow();
+
+  switch(gameState){
+    case 'title':
+      drawTitle();
+      if(kj() || clicked){
+        clicked = false;
+        initAudio();
+        playSound(440,0.1);
+        gameState='chapter_select';
+      }
+      break;
+
+    case 'chapter_select':
+      drawChapterSelect();
+      // 키보드 또는 클릭으로 챕터 1 바로 시작
+      if(clicked){
+        clicked = false;
+        loadLevel(0);
+        gameState='play';
+        playSound(523,0.15);
+        break;
+      }
+      for(let i=0;i<LEVELS.length;i++){
+        if(keys[''+(i+1)]){
+          loadLevel(i);
+          gameState='play';
+          playSound(523,0.15);
+          break;
+        }
+      }
+      break;
+
+    case 'play':
+      updatePlayer();
+      updateObjects();
+      updateParticles();
+      draw();
+      break;
+
+    case 'death':
+      deathTimer--;
+      updateParticles();
+      drawDeath();
+      if(deathTimer<=0) respawn();
+      break;
+
+    case 'complete':
+      completeTimer--;
+      updateParticles();
+      drawComplete();
+      if(kj() && completeTimer<=0){
+        if(chapter<LEVELS.length-1){
+          loadLevel(chapter+1);
+          gameState='play';
+          playSound(523,0.15);
+        } else {
+          gameState='title';
+          deathCount=0;
+        }
+      }
+      break;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>

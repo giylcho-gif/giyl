@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>바이크 점프맵</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Segoe UI',sans-serif}
+  #gameContainer{position:relative}
+  canvas{display:block;border-radius:8px;box-shadow:0 0 40px rgba(100,180,255,0.3)}
+  .screen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;border-radius:8px;z-index:10;transition:opacity .3s}
+  .screen.hidden{display:none}
+  #mainMenu{background:rgba(20,40,80,0.94)}
+  #mainMenu h1{color:#fff;font-size:48px;margin-bottom:8px;text-shadow:0 0 25px rgba(255,150,50,0.8)}
+  #mainMenu .subtitle{color:#8ab;font-size:15px;margin-bottom:40px}
+  .menu-buttons{display:flex;gap:16px;align-items:stretch}
+  .menu-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 24px;min-width:120px;font-size:16px;color:#fff;border:none;border-radius:14px;cursor:pointer;transition:transform .2s}
+  .menu-btn:hover{transform:translateY(-3px)}
+  .menu-btn .btn-icon{font-size:32px;margin-bottom:8px}
+  .menu-btn .btn-label{font-weight:bold}
+  #shopBtn{background:linear-gradient(135deg,#f093fb,#f5576c)}
+  #playBtn{background:linear-gradient(135deg,#ff9a44,#fc6076);min-width:140px;padding:24px 32px}
+  #playBtn .btn-icon{font-size:40px}
+  #playBtn .btn-label{font-size:18px}
+  #levelsBtn{background:linear-gradient(135deg,#667eea,#764ba2)}
+  .menu-footer{color:#567;font-size:13px;margin-top:30px}
+  #levelSelect{background:rgba(15,30,80,0.94)}
+  #levelSelect h2{color:#fff;font-size:30px;margin-bottom:24px}
+  .level-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px}
+  .level-card{width:72px;height:80px;border:none;border-radius:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:bold;transition:transform .15s;position:relative}
+  .level-card:hover:not(:disabled){transform:scale(1.08)}
+  .level-card:disabled{opacity:.4;cursor:not-allowed}
+  .level-card .level-num{font-size:22px}
+  .level-card .level-stars{font-size:11px;margin-top:4px}
+  .back-btn{padding:10px 30px;font-size:16px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:20px;cursor:pointer}
+  .back-btn:hover{background:rgba(255,255,255,0.2)}
+  #shopScreen{background:rgba(30,15,50,0.94)}
+  #shopScreen h2{color:#fff;font-size:30px;margin-bottom:8px}
+  .shop-coins{color:#ffd700;font-size:18px;margin-bottom:20px}
+  .shop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px;max-height:400px;overflow-y:auto;padding:4px}
+  .shop-item{background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;color:#fff;cursor:pointer;text-align:center;transition:border-color .2s,transform .15s}
+  .shop-item:hover{border-color:rgba(255,255,255,0.3);transform:scale(1.03)}
+  .shop-item.owned{border-color:#4facfe}
+  .shop-item.equipped{border-color:#ffd700;box-shadow:0 0 10px rgba(255,215,0,0.3)}
+  .shop-item .item-icon{font-size:28px;margin-bottom:6px}
+  .shop-item .item-name{font-size:13px;font-weight:bold;margin-bottom:4px}
+  .shop-item .item-price{font-size:12px;color:#ffd700}
+  #gameOverScreen{background:rgba(20,20,60,0.88)}
+  #gameOverScreen h1{color:#fff;font-size:44px;margin-bottom:10px}
+  #gameOverScreen .result-info{color:#ffd700;font-size:24px;margin-bottom:6px}
+  #gameOverScreen .result-detail{color:#aaa;font-size:15px;margin-bottom:6px}
+  #gameOverScreen .coin-earned{color:#ffd700;font-size:18px;margin-bottom:20px}
+  .gameover-buttons{display:flex;gap:12px}
+  .gameover-buttons button{padding:12px 28px;font-size:16px;color:#fff;border:none;border-radius:24px;cursor:pointer;transition:transform .2s}
+  .gameover-buttons button:hover{transform:scale(1.05)}
+  #retryBtn{background:linear-gradient(135deg,#ff9a44,#fc6076)}
+  #menuBtn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2)!important}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="mainMenu" class="screen">
+    <h1>🏍️ 바이크 점프맵</h1>
+    <div class="subtitle">→ 가속 | ← 감속 | 언덕에서 날아올라 공중회전!</div>
+    <div class="menu-buttons">
+      <button class="menu-btn" id="shopBtn"><span class="btn-icon">🛒</span><span class="btn-label">상점</span></button>
+      <button class="menu-btn" id="playBtn"><span class="btn-icon">▶</span><span class="btn-label">시작</span></button>
+      <button class="menu-btn" id="levelsBtn"><span class="btn-icon">📋</span><span class="btn-label">레벨</span></button>
+    </div>
+    <div class="menu-footer">→ 가속 | ← 브레이크 | 공중에서 ↑↓ 회전 | 착지 시 바퀴로!</div>
+  </div>
+  <div id="levelSelect" class="screen hidden">
+    <h2>📋 레벨 선택</h2>
+    <div class="level-grid" id="levelGrid"></div>
+    <button class="back-btn" id="levelBackBtn">← 메뉴로</button>
+  </div>
+  <div id="shopScreen" class="screen hidden">
+    <h2>🛒 상점</h2>
+    <div class="shop-coins" id="shopCoins">💰 0 코인</div>
+    <div class="shop-grid" id="shopGrid"></div>
+    <button class="back-btn" id="shopBackBtn">← 메뉴로</button>
+  </div>
+  <div id="gameOverScreen" class="screen hidden">
+    <h1 id="goTitle">💫 게임 오버</h1>
+    <div class="result-info" id="goScore"></div>
+    <div class="result-detail" id="goHighScore"></div>
+    <div class="result-detail" id="goLevel"></div>
+    <div class="coin-earned" id="goCoin"></div>
+    <div class="gameover-buttons">
+      <button id="retryBtn">다시 도전</button>
+      <button id="nextLevelBtn" style="display:none;background:linear-gradient(135deg,#4ade80,#22c55e);">다음 레벨 ▶</button>
+      <button id="menuBtn">메뉴로</button>
+    </div>
+  </div>
+</div>
+<script>
+const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d');
+const W=900,H=500;
+canvas.width=W;canvas.height=H;
+
+// === 저장 ===
+function loadData(){const d=JSON.parse(localStorage.getItem('bikejump3')||'{}');return{coins:d.coins||0,levelStars:d.levelStars||{},unlockedLevel:d.unlockedLevel||1,ownedSkins:d.ownedSkins||['default'],equippedSkin:d.equippedSkin||'default'};}
+function saveData(d){localStorage.setItem('bikejump3',JSON.stringify(d));}
+let gameData=loadData();
+
+// === 레벨 ===
+const LEVELS=[
+  {id:1, name:'초원',   targetDist:250,  bg:'sky',    hillFreq:0.005,hillAmp:25, gapChance:0,   gapW:0,   rampChance:0.03, color:'#4ade80'},
+  {id:2, name:'언덕',   targetDist:300,  bg:'sky',    hillFreq:0.006,hillAmp:30, gapChance:0.01,gapW:50,  rampChance:0.04, color:'#34d399'},
+  {id:3, name:'들판',   targetDist:350,  bg:'sky',    hillFreq:0.006,hillAmp:35, gapChance:0.02,gapW:60,  rampChance:0.04, color:'#2dd4bf'},
+  {id:4, name:'구름 위',targetDist:400,  bg:'sunset', hillFreq:0.007,hillAmp:40, gapChance:0.02,gapW:70,  rampChance:0.05, color:'#f59e0b'},
+  {id:5, name:'하늘길', targetDist:450,  bg:'sunset', hillFreq:0.007,hillAmp:45, gapChance:0.03,gapW:80,  rampChance:0.05, color:'#f97316'},
+  {id:6, name:'성층권', targetDist:500,  bg:'night',  hillFreq:0.008,hillAmp:50, gapChance:0.03,gapW:90,  rampChance:0.06, color:'#8b5cf6'},
+  {id:7, name:'오로라', targetDist:550,  bg:'night',  hillFreq:0.008,hillAmp:55, gapChance:0.04,gapW:100, rampChance:0.06, color:'#a78bfa'},
+  {id:8, name:'궤도',   targetDist:600,  bg:'space',  hillFreq:0.009,hillAmp:60, gapChance:0.04,gapW:110, rampChance:0.07, color:'#ec4899'},
+  {id:9, name:'블랙홀', targetDist:650,  bg:'space',  hillFreq:0.010,hillAmp:65, gapChance:0.05,gapW:120, rampChance:0.08, color:'#ef4444'},
+  {id:10,name:'은하 끝',targetDist:2500, bg:'space',  hillFreq:0.012,hillAmp:80, gapChance:0.06,gapW:140, rampChance:0.10, color:'#dc2626'},
+];
+
+// === 상점 ===
+const SHOP_ITEMS=[
+  {id:'default',name:'기본',icon:'🏍️',price:0,  bodyColor:'#e63946',accentColor:'#d62828'},
+  {id:'blue',   name:'블루',icon:'💙',price:50, bodyColor:'#3b82f6',accentColor:'#1d4ed8'},
+  {id:'green',  name:'그린',icon:'💚',price:50, bodyColor:'#22c55e',accentColor:'#15803d'},
+  {id:'gold',   name:'골드',icon:'⭐',price:100,bodyColor:'#fbbf24',accentColor:'#b45309'},
+  {id:'purple', name:'퍼플',icon:'💜',price:100,bodyColor:'#a855f7',accentColor:'#7c3aed'},
+  {id:'silver', name:'실버',icon:'⚪',price:200,bodyColor:'#94a3b8',accentColor:'#64748b'},
+  {id:'neon',   name:'네온',icon:'💫',price:200,bodyColor:'#06b6d4',accentColor:'#0891b2'},
+  {id:'flame',  name:'화염',icon:'🔥',price:300,bodyColor:'#fb923c',accentColor:'#dc2626'},
+];
+
+// === 지형 시스템 ===
+// 지형은 세그먼트 배열: 각 세그먼트 = {x, y} 포인트
+// 10px 간격으로 지면 높이를 저장
+const SEGMENT_W = 10; // 세그먼트 너비(px)
+let terrain = []; // [{y, type}] - type: 'ground'|'gap'|'ramp'
+let terrainDecorations = [];
+let furthestTerrainX = 0;
+
+function getTerrainY(worldX) {
+  const idx = Math.floor(worldX / SEGMENT_W);
+  if(idx < 0) return H - 50;
+  if(idx >= terrain.length) return H - 50;
+  const seg = terrain[idx];
+  if(seg.type === 'gap') return H + 200; // 갭 = 바닥 없음
+  // 보간
+  const nextIdx = Math.min(idx + 1, terrain.length - 1);
+  const nextSeg = terrain[nextIdx];
+  if(nextSeg.type === 'gap') return seg.y;
+  const frac = (worldX - idx * SEGMENT_W) / SEGMENT_W;
+  return seg.y + (nextSeg.y - seg.y) * frac;
+}
+
+function getTerrainSlope(worldX) {
+  const y1 = getTerrainY(worldX - 5);
+  const y2 = getTerrainY(worldX + 5);
+  return Math.atan2(y2 - y1, 10);
+}
+
+function isGap(worldX) {
+  const idx = Math.floor(worldX / SEGMENT_W);
+  if(idx < 0 || idx >= terrain.length) return false;
+  return terrain[idx].type === 'gap';
+}
+
+function generateTerrain(upToX) {
+  const startIdx = terrain.length;
+  const endIdx = Math.ceil(upToX / SEGMENT_W) + 10;
+
+  // 레벨 파라미터
+  let hillFreq, hillAmp, gapChance, gapW, rampChance;
+  if(currentLevel) {
+    hillFreq = currentLevel.hillFreq;
+    hillAmp = currentLevel.hillAmp;
+    gapChance = currentLevel.gapChance;
+    gapW = currentLevel.gapW;
+    rampChance = currentLevel.rampChance;
+  } else {
+    // 자유모드: 거리에 따라 난이도
+    const distM = (startIdx * SEGMENT_W) / 10;
+    const diff = Math.min(distM / 1000, 1);
+    hillFreq = 0.005 + diff * 0.007;
+    hillAmp = 25 + diff * 55;
+    gapChance = diff * 0.05;
+    gapW = 50 + diff * 90;
+    rampChance = 0.03 + diff * 0.07;
+  }
+
+  for(let i = startIdx; i < endIdx; i++) {
+    const wx = i * SEGMENT_W;
+    const distM = wx / 10;
+
+    // 기본 지면: 사인파 합성으로 자연스러운 언덕
+    const baseY = H - 80;
+    // 초반 500px는 평탄하게 시작 → 서서히 언덕 등장
+    const startFade = Math.min(1, Math.max(0, (wx - 300) / 400));
+    const hill1 = Math.sin(wx * hillFreq) * hillAmp * startFade;
+    const hill2 = Math.sin(wx * hillFreq * 2.3 + 1.5) * hillAmp * 0.4 * startFade;
+    const hill3 = Math.sin(wx * hillFreq * 0.5 + 3.0) * hillAmp * 0.6 * startFade;
+    let y = baseY + hill1 + hill2 + hill3;
+    y = Math.max(100, Math.min(H - 30, y));
+
+    // 갭(구멍) 체크
+    if(i > 50 && Math.random() < gapChance * 0.02) {
+      // 갭 시작
+      const gapSegs = Math.floor((gapW + Math.random() * 40) / SEGMENT_W);
+      for(let g = 0; g < gapSegs && i + g < endIdx; g++) {
+        terrain.push({ y: H + 200, type: 'gap' });
+      }
+      i += gapSegs - 1;
+      continue;
+    }
+
+    // 점프대(램프) 체크: 급경사 올라가는 부분
+    if(i > 30 && Math.random() < rampChance * 0.025) {
+      // 램프: 서서히 올라갔다가 급하게 끝남 (점프대)
+      const rampLen = 12 + Math.floor(Math.random() * 8); // 적당한 램프
+      const rampHeight = 50 + Math.random() * 60; // 적당한 높이
+      const startY = y;
+      for(let r = 0; r < rampLen && i + r < endIdx; r++) {
+        const t = r / rampLen;
+        // 램프 커브: 처음 완만 → 끝에서 급격히 올라감
+        const rampY = startY - rampHeight * Math.pow(t, 1.5);
+        terrain.push({ y: Math.max(80, rampY), type: r >= rampLen - 2 ? 'ramp_tip' : 'ramp' });
+      }
+      i += rampLen - 1;
+      // 램프 끝 후 갭 or 착지 구간
+      const airSegs = 8 + Math.floor(Math.random() * 12);
+      for(let a = 0; a < airSegs && i + a + 1 < endIdx; a++) {
+        terrain.push({ y: H + 200, type: 'gap' });
+      }
+      i += airSegs;
+      continue;
+    }
+
+    terrain.push({ y, type: 'ground' });
+
+    // 장식물
+    if(Math.random() < 0.02) {
+      const tType = Math.random();
+      if(distM < 800 && tType < 0.3) terrainDecorations.push({type:'tree',x:wx,y,h:30+Math.random()*40});
+      else if(distM < 800 && tType < 0.5) terrainDecorations.push({type:'pine',x:wx,y,h:25+Math.random()*35});
+      else if(tType < 0.6) terrainDecorations.push({type:'rock',x:wx,y,w:8+Math.random()*15,h:5+Math.random()*12});
+      else if(distM > 200 && distM < 1000 && tType < 0.7) terrainDecorations.push({type:'cactus',x:wx,y,h:15+Math.random()*20});
+      else if(distM > 700 && tType < 0.8) terrainDecorations.push({type:'crystal',x:wx,y,h:10+Math.random()*18,color:['#a78bfa','#6ee7b7','#f0abfc','#67e8f9'][Math.floor(Math.random()*4)]});
+      else if(Math.random()<0.5) terrainDecorations.push({type:'bush',x:wx,y,w:10+Math.random()*15,h:6+Math.random()*10});
+    }
+    if(Math.random() < 0.06) {
+      terrainDecorations.push({type:'grass',x:wx+Math.random()*8,y,h:3+Math.random()*7});
+    }
+    if(Math.random() < 0.008 && distM > 50) {
+      terrainDecorations.push({type:'sign',x:wx,y,text:[`${Math.floor(distM)}m`,'주의!','점프!'][Math.floor(Math.random()*3)]});
+    }
+  }
+  furthestTerrainX = endIdx * SEGMENT_W;
+}
+
+// === 상태 ===
+let gameRunning=false,distanceTraveled=0,cameraX=0;
+let gameOverTriggered=false,currentLevel=null,earnedCoins=0;
+let levelBanner=null,currentFreeLevel=0;
+let totalFlips=0, currentRotation=0, wasAirborne=false, flipComboTimer=0, flipComboText='';
+let particles=[];
+const keys={};
+document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space')e.preventDefault();});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+
+// 바이크
+const bike={
+  x:150,y:0,w:44,h:24,
+  vx:0,vy:0,onGround:false,
+  maxSpeed:12,accel:0.25,brake:0.3,friction:0.996,
+  gravity:0.5,
+  angle:0,   // 실제 각도 (rad)
+  targetAngle:0, // 지면 추적용 목표 각도
+  angVel:0,  // 각속도
+  wheelRot:0,
+  trail:[],
+  // 서스펜션 시뮬레이션
+  suspOffset:0, // 서스펜션 오프셋
+  suspVel:0,    // 서스펜션 속도
+  lastGroundY:0,
+  airTime:0,    // 공중 체류 시간
+};
+
+// 배경
+let clouds=[],stars=[],bgObjects=[],bgMountains=[];
+function getZone(d){if(d<300)return 0;if(d<800)return 1;if(d<1500)return 2;return 3;}
+function getZoneBlend(d){if(d<300)return{zone:0,t:0};if(d<350)return{zone:0,t:(d-300)/50};if(d<800)return{zone:1,t:0};if(d<850)return{zone:1,t:(d-800)/50};if(d<1500)return{zone:2,t:0};if(d<1550)return{zone:2,t:(d-1500)/50};return{zone:3,t:0};}
+function getLevelZoneOffset(){if(!currentLevel)return 0;if(currentLevel.bg==='sunset')return 300;if(currentLevel.bg==='night')return 800;if(currentLevel.bg==='space')return 1500;return 0;}
+
+function createBgObjects(){
+  clouds=[];stars=[];bgObjects=[];bgMountains=[];
+  for(let i=0;i<50;i++)clouds.push({x:Math.random()*W*15,y:15+Math.random()*120,w:50+Math.random()*130,h:18+Math.random()*22,speed:0.08+Math.random()*0.2,alpha:0.12+Math.random()*0.35,parallax:0.05+Math.random()*0.25,bumps:Math.floor(2+Math.random()*3)});
+  for(let i=0;i<180;i++)stars.push({x:Math.random()*W*15,y:Math.random()*H*0.7,size:Math.random()*2.5+0.5,brightness:Math.random(),twinkleSpeed:0.002+Math.random()*0.004,parallax:0.03+Math.random()*0.12});
+  for(let i=0;i<12;i++)bgObjects.push({x:Math.random()*W*15,y:Math.random()*H*0.4+20,size:12+Math.random()*40,type:Math.random()<0.5?'planet':'asteroid',color:['#ff6b4a','#7c5cbf','#3dd68c','#f0c040','#e84393'][Math.floor(Math.random()*5)],hasRing:Math.random()<0.3,parallax:0.06+Math.random()*0.1,rotation:Math.random()*Math.PI*2,rotSpeed:(Math.random()-0.5)*0.01});
+  for(let i=0;i<80;i++){const x=i*200+Math.random()*120;bgMountains.push({x,w:100+Math.random()*200,h:50+Math.random()*120,color:Math.random()<0.5?'#2d5a3d':'#3a6b4f',parallax:0.12+Math.random()*0.08});}
+}
+
+function spawnParticles(x,y,color,count){for(let i=0;i<count;i++)particles.push({x,y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6-2,life:1,decay:0.02+Math.random()*0.03,size:2+Math.random()*3,color});}
+
+// === 화면/메뉴 ===
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');}
+document.getElementById('playBtn').addEventListener('click',()=>{currentLevel=null;startGame();});
+document.getElementById('levelsBtn').addEventListener('click',()=>{renderLevelGrid();showScreen('levelSelect');});
+document.getElementById('shopBtn').addEventListener('click',()=>{renderShop();showScreen('shopScreen');});
+
+function renderLevelGrid(){
+  const grid=document.getElementById('levelGrid');grid.innerHTML='';
+  for(const lv of LEVELS){
+    const btn=document.createElement('button');btn.className='level-card';
+    const unlocked=lv.id<=gameData.unlockedLevel;btn.disabled=!unlocked;
+    btn.style.background=unlocked?`linear-gradient(135deg,${lv.color},${lv.color}bb)`:'rgba(255,255,255,0.05)';
+    if(unlocked){const sc=gameData.levelStars[lv.id]||0;btn.innerHTML=`<span class="level-num">${lv.id}</span><span style="font-size:11px;margin-top:2px;">${lv.name}</span><span class="level-stars">${'★'.repeat(sc)+'☆'.repeat(3-sc)}</span>`;btn.addEventListener('click',()=>{currentLevel=lv;startGame();});}
+    else btn.innerHTML=`<span style="font-size:20px">🔒</span><span style="font-size:11px;margin-top:4px;">${lv.name}</span>`;
+    grid.appendChild(btn);
+  }
+}
+document.getElementById('levelBackBtn').addEventListener('click',()=>showScreen('mainMenu'));
+
+function renderShop(){
+  document.getElementById('shopCoins').textContent=`💰 ${gameData.coins} 코인`;
+  const grid=document.getElementById('shopGrid');grid.innerHTML='';
+  for(const item of SHOP_ITEMS){
+    const div=document.createElement('div');div.className='shop-item';
+    const owned=gameData.ownedSkins.includes(item.id),equipped=gameData.equippedSkin===item.id;
+    if(owned)div.classList.add('owned');if(equipped)div.classList.add('equipped');
+    const st=equipped?'✅ 장착 중':(owned?'장착하기':`💰 ${item.price}`);
+    div.innerHTML=`<div class="item-icon">${item.icon}</div><div class="item-name">${item.name}</div><div class="item-price">${st}</div>`;
+    div.addEventListener('click',()=>{if(equipped)return;if(owned){gameData.equippedSkin=item.id;saveData(gameData);renderShop();}else if(gameData.coins>=item.price){gameData.coins-=item.price;gameData.ownedSkins.push(item.id);gameData.equippedSkin=item.id;saveData(gameData);renderShop();}});
+    grid.appendChild(div);
+  }
+}
+document.getElementById('shopBackBtn').addEventListener('click',()=>showScreen('mainMenu'));
+function getCurrentSkin(){return SHOP_ITEMS.find(s=>s.id===gameData.equippedSkin)||SHOP_ITEMS[0];}
+
+// === 게임 시작/오버 ===
+function startGame(){
+  gameRunning=true;gameOverTriggered=false;
+  distanceTraveled=0;cameraX=0;earnedCoins=0;
+  levelBanner=null;currentFreeLevel=0;
+  totalFlips=0;currentRotation=0;wasAirborne=false;flipComboTimer=0;flipComboText='';
+  particles=[];terrain=[];terrainDecorations=[];furthestTerrainX=0;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  generateTerrain(W*5);
+  bike.x=150;bike.y=getTerrainY(150)-bike.h;bike.vx=6;bike.vy=0;
+  bike.onGround=true;bike.angle=0;bike.targetAngle=0;bike.angVel=0;bike.wheelRot=0;bike.trail=[];
+  bike.suspOffset=0;bike.suspVel=0;bike.lastGroundY=0;bike.airTime=0;
+  createBgObjects();
+  requestAnimationFrame(gameLoop);
+}
+
+function gameOver(){
+  if(gameOverTriggered)return;gameOverTriggered=true;gameRunning=false;
+  const score=Math.floor(distanceTraveled);
+  earnedCoins=Math.floor(score/10)+totalFlips*5;gameData.coins+=earnedCoins;
+  let cleared=false,starResult=0;
+  if(currentLevel){
+    const t=currentLevel.targetDist;
+    if(score>=t){cleared=true;if(score>=t*1.5)starResult=3;else if(score>=t*1.2)starResult=2;else starResult=1;
+    const prev=gameData.levelStars[currentLevel.id]||0;if(starResult>prev)gameData.levelStars[currentLevel.id]=starResult;
+    if(currentLevel.id>=gameData.unlockedLevel&&currentLevel.id<10)gameData.unlockedLevel=currentLevel.id+1;}
+  }
+  saveData(gameData);
+  const nextBtn=document.getElementById('nextLevelBtn');nextBtn.style.display='none';
+  if(currentLevel){
+    document.getElementById('goTitle').textContent=cleared?'🎉 클리어!':'💫 실패...';
+    document.getElementById('goScore').textContent=`도달: ${score}m / 목표: ${currentLevel.targetDist}m`;
+    document.getElementById('goHighScore').textContent=cleared?'★'.repeat(starResult)+'☆'.repeat(3-starResult):`회전: ${totalFlips}회`;
+    document.getElementById('goLevel').textContent=`레벨 ${currentLevel.id} - ${currentLevel.name}`;
+    if(cleared&&currentLevel.id<10){nextBtn.style.display='inline-block';nextBtn.textContent=`다음 레벨 ▶ Lv.${currentLevel.id+1}`;}
+  }else{
+    document.getElementById('goTitle').textContent='💫 게임 오버';
+    document.getElementById('goScore').textContent=`거리: ${score}m | 회전: ${totalFlips}회`;
+    document.getElementById('goHighScore').textContent='';
+    document.getElementById('goLevel').textContent='자유 모드';
+  }
+  document.getElementById('goCoin').textContent=`+${earnedCoins} 코인 획득!`;
+  showScreen('gameOverScreen');
+}
+
+document.getElementById('retryBtn').addEventListener('click',()=>startGame());
+document.getElementById('nextLevelBtn').addEventListener('click',()=>{if(currentLevel&&currentLevel.id<10){currentLevel=LEVELS[currentLevel.id];startGame();}});
+document.getElementById('menuBtn').addEventListener('click',()=>showScreen('mainMenu'));
+
+// === 업데이트 ===
+function update(){
+  // 가속/감속 - 자동 가속 + 추가 부스트
+  const onG=bike.onGround;
+  const accelMult=onG?1:0.15;
+  // ★ 자동 가속: 항상 앞으로 달림
+  if(bike.vx<7){
+    bike.vx+=0.12; // 기본 속도까지 빠르게 자동 가속
+  }
+  // → 키: 부스트 (더 빠르게)
+  if(keys['ArrowRight']||keys['KeyD']){
+    bike.vx+=bike.accel*accelMult;
+    if(bike.vx>bike.maxSpeed)bike.vx=bike.maxSpeed;
+  }
+  // ← 키: 감속
+  if(keys['ArrowLeft']||keys['KeyA']){
+    if(onG){bike.vx-=bike.brake;if(bike.vx<1)bike.vx=1;}
+    else{bike.vx*=0.995;}
+  }
+
+  // 마찰 (지면/공중 다르게)
+  if(onG){
+    bike.vx*=bike.friction;
+  }else{
+    bike.vx*=0.999; // 공중은 공기저항만
+  }
+
+  // 중력
+  bike.vy+=bike.gravity;
+  if(bike.vy>15)bike.vy=15;
+
+  // 위치 이동
+  bike.x+=bike.vx;
+  bike.y+=bike.vy;
+
+  bike.wheelRot+=bike.vx*0.12;
+
+  // 지형 생성
+  if(furthestTerrainX<bike.x+W*4)generateTerrain(bike.x+W*6);
+
+  // 지면 충돌
+  const centerX=bike.x+bike.w/2;
+  const groundY=getTerrainY(centerX);
+  const onGap=isGap(centerX);
+  const prevOnGround=bike.onGround;
+  bike.onGround=false;
+
+  if(!onGap && bike.y+bike.h>=groundY){
+    bike.y=groundY-bike.h;
+    bike.onGround=true;
+
+    // 착지 판정 (크래시 없음! 항상 안전 착지)
+    if(!prevOnGround && wasAirborne && bike.airTime>8){
+      // 플립 카운트 정산
+      const flips=Math.floor(Math.abs(currentRotation)/(Math.PI*2));
+      if(flips>0){
+        totalFlips+=flips;
+        flipComboText=`${flips}x 회전!`;
+        flipComboTimer=90;
+        earnedCoins+=flips*5;
+        spawnParticles(bike.x+bike.w/2,bike.y,'#ffd700',15);
+      }
+      currentRotation=0;
+      wasAirborne=false;
+      // 착지 충격 - 서스펜션
+      bike.suspVel=Math.min(bike.vy*0.5,6);
+      // 착지 시 먼지
+      spawnParticles(bike.x+bike.w/2,bike.y+bike.h,'#aa9977',5);
+      // 착지 시 각도 자동 보정
+      bike.angVel=0;
+    }
+
+    bike.airTime=0;
+
+    // 지면 경사에 맞춰 각도 부드럽게 조정
+    const slopeAngle=getTerrainSlope(centerX);
+    bike.targetAngle=slopeAngle;
+    let angleDiff=bike.targetAngle-bike.angle;
+    while(angleDiff>Math.PI)angleDiff-=Math.PI*2;
+    while(angleDiff<-Math.PI)angleDiff+=Math.PI*2;
+    bike.angle+=angleDiff*0.2;
+    bike.angVel*=0.4;
+
+    // 경사에 따른 가속/감속
+    const slopeForce=Math.sin(slopeAngle)*0.35;
+    bike.vx+=slopeForce;
+
+    // 서스펜션 시뮬레이션
+    bike.suspVel+=-bike.suspOffset*0.3;
+    bike.suspVel*=0.7;
+    bike.suspOffset+=bike.suspVel;
+
+    // ★★★ 핵심: 언덕 꼭대기/오르막 끝에서 자연스럽게 날아오름 ★★★
+    // 지면 기울기 변화율 (곡률) 체크 - 오목→볼록 전환점에서 뜸
+    const slopeBehind=getTerrainSlope(centerX-20);
+    const slopeAhead=getTerrainSlope(centerX+20);
+    const curvature=slopeAhead-slopeBehind; // 양수 = 볼록(언덕 꼭대기)
+
+    const idx=Math.floor(centerX/SEGMENT_W);
+    const isRampTip=idx>=0&&idx<terrain.length&&terrain[idx].type==='ramp_tip';
+
+    if(isRampTip){
+      // 램프 끝: 적당히 발사
+      const speed=Math.sqrt(bike.vx*bike.vx+bike.vy*bike.vy);
+      bike.vy=Math.max(Math.sin(slopeAngle)*speed*0.8, -7);
+      bike.vx=Math.cos(slopeAngle)*speed*1.02;
+      bike.onGround=false;
+    }
+    else if(curvature>0.03 && bike.vx>3){
+      // 볼록 지형 (언덕 꼭대기) → 살짝만 뜸
+      const launchPower=Math.min(curvature*bike.vx*0.8, 4);
+      if(launchPower>1){
+        bike.vy=-launchPower;
+        bike.onGround=false;
+        bike.angle=slopeAngle;
+      }
+    }
+    else{
+      // 평지/오목 지형: 지면에 붙어있음
+      const nextGroundY=getTerrainY(centerX+bike.vx*2);
+      const groundDelta=nextGroundY-groundY;
+      if(groundDelta>1){
+        bike.vy=groundDelta*0.4;
+      }else{
+        bike.vy=0;
+      }
+    }
+
+    bike.lastGroundY=groundY;
+  }
+
+  // 공중
+  if(!bike.onGround){
+    wasAirborne=true;
+    bike.airTime++;
+    // ★★★ 공중 회전 - 겁나 잘 돌게! ★★★
+    const rotPower=0.015+Math.abs(bike.vx)*0.002; // 회전력 3배!
+    if(keys['ArrowUp']||keys['KeyW']||keys['Space']){bike.angVel-=rotPower;} // 백플립
+    if(keys['ArrowDown']||keys['KeyS']){bike.angVel+=rotPower;} // 프론트플립
+    // 키 안 누르면 약하게 앞으로 기울어짐
+    if(!keys['ArrowUp']&&!keys['KeyW']&&!keys['Space']&&!keys['ArrowDown']&&!keys['KeyS']){
+      bike.angVel+=0.002;
+    }
+    bike.angVel*=0.96; // 적당한 감쇠 (너무 안 멈추게)
+    bike.angle+=bike.angVel;
+    currentRotation+=bike.angVel;
+    // 서스펜션 리셋
+    bike.suspOffset*=0.9;
+    bike.suspVel*=0.9;
+  }
+
+  // 배기 트레일
+  if(bike.vx>1){
+    const trailX=bike.x-8*Math.cos(bike.angle);
+    const trailY=bike.y+bike.h/2+8*Math.sin(bike.angle);
+    bike.trail.push({x:trailX,y:trailY,life:1,size:1.5+Math.random()*2.5});
+  }
+  if(bike.trail.length>30)bike.trail.shift();
+
+  // 카메라 (부드러운 추적 + 약간 앞을 봄)
+  const lookAhead=bike.vx*8;
+  const targetCamX=bike.x-W*0.28+lookAhead;
+  const targetCamY=0; // Y축은 고정
+  cameraX+=(targetCamX-cameraX)*0.05; // 더 부드러운 카메라
+  if(cameraX<0)cameraX=0;
+
+  // 거리
+  const cd=Math.floor(bike.x/10);
+  if(cd>distanceTraveled)distanceTraveled=cd;
+
+  // 레벨 클리어
+  if(currentLevel&&distanceTraveled>=currentLevel.targetDist){gameOver();return;}
+
+  // 화면 아래 추락 → 죽지 않고 리스폰!
+  if(bike.y>H+200){
+    // 현재 위치 앞쪽에서 지면 있는 곳 찾기
+    let respawnX=bike.x+100;
+    for(let rx=respawnX;rx<respawnX+2000;rx+=SEGMENT_W){
+      if(!isGap(rx)){
+        bike.x=rx;
+        bike.y=getTerrainY(rx)-bike.h-20;
+        bike.vy=0;
+        bike.vx=Math.max(bike.vx,3);
+        bike.angle=0;bike.angVel=0;
+        bike.onGround=false;
+        wasAirborne=false;currentRotation=0;
+        spawnParticles(bike.x+bike.w/2,bike.y+bike.h,'#ffffff',10);
+        break;
+      }
+    }
+  }
+
+  // 레벨업 배너
+  if(!currentLevel&&currentFreeLevel<LEVELS.length){
+    if(distanceTraveled>=LEVELS[currentFreeLevel].targetDist){
+      const cl=LEVELS[currentFreeLevel];
+      const nl=currentFreeLevel+1<LEVELS.length?LEVELS[currentFreeLevel+1]:null;
+      levelBanner={text:`레벨 ${cl.id} 클리어!`,subtext:nl?`레벨 ${nl.id} ${nl.name} 시작`:'모든 레벨 완료!',color:cl.color,timer:150};
+      currentFreeLevel++;
+    }
+  }
+  if(levelBanner){levelBanner.timer--;if(levelBanner.timer<=0)levelBanner=null;}
+  if(flipComboTimer>0)flipComboTimer--;
+
+  // 파티클
+  for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;p.life-=p.decay;}
+  particles=particles.filter(p=>p.life>0);
+  for(const t of bike.trail)t.life-=0.05;
+  bike.trail=bike.trail.filter(t=>t.life>0);
+
+  // 장식 정리
+  terrainDecorations=terrainDecorations.filter(d=>d.x>cameraX-300);
+}
+
+// === 렌더링 ===
+function draw(){
+  const now=Date.now();
+  const bgDist=distanceTraveled+getLevelZoneOffset();
+  const{zone,t}=getZoneBlend(bgDist);
+  const lerp=(a,b,f)=>Math.floor(a+(b-a)*f);
+
+  // 배경
+  const zC=[[[40,120,220],[135,200,250]],[[180,60,30],[255,150,50]],[[10,10,40],[25,25,80]],[[5,0,15],[15,5,35]]];
+  const cT=zC[zone][0],cB=zC[zone][1],nz=Math.min(zone+1,3),nT=zC[nz][0],nB=zC[nz][1];
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,`rgb(${lerp(cT[0],nT[0],t)},${lerp(cT[1],nT[1],t)},${lerp(cT[2],nT[2],t)})`);
+  bg.addColorStop(1,`rgb(${lerp(cB[0],nB[0],t)},${lerp(cB[1],nB[1],t)},${lerp(cB[2],nB[2],t)})`);
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  // 구름
+  const cA=zone<=1?(zone===1?Math.max(0,1-t):1):0;
+  if(cA>0)for(const c of clouds){const cx=((c.x-cameraX*c.parallax+Math.sin(now*0.0002*c.speed)*20)%(W*5)+W*5)%(W*5)-W*0.5;if(cx<-c.w*2||cx>W+c.w)continue;const sT=zone===0?t:(zone===1?1:0);ctx.fillStyle=`rgba(${lerp(255,255,sT)},${lerp(255,180,sT)},${lerp(255,120,sT)},${c.alpha*cA})`;ctx.beginPath();const sw=c.w/c.bumps;for(let i=0;i<c.bumps;i++){const bx=cx+sw*i+sw/2,br=c.h/2+Math.sin(i*1.8+c.x)*4;ctx.moveTo(bx+br,c.y);ctx.arc(bx,c.y,br,0,Math.PI*2);}ctx.arc(cx+c.w/2,c.y+c.h*0.2,c.w*0.5,0,Math.PI*2);ctx.fill();}
+
+  // 태양
+  if((zone===0&&t>0)||zone===1){const sa=zone===0?t:(zone===1?Math.max(0,1-t*1.5):0);if(sa>0){const sx=W*0.82,sy=H*0.3;const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,140);sg.addColorStop(0,`rgba(255,200,50,${0.6*sa})`);sg.addColorStop(0.3,`rgba(255,120,30,${0.3*sa})`);sg.addColorStop(1,'rgba(255,60,20,0)');ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);}}
+
+  // 별
+  const stA=zone===1?t:(zone>=2?1:0);
+  if(stA>0)for(const s of stars){const sx=((s.x-cameraX*s.parallax)%(W*4)+W*4)%(W*4)-W*0.3;if(sx<-5||sx>W+5)continue;const tw=0.4+Math.sin(now*s.twinkleSpeed+s.brightness*10)*0.3+s.brightness*0.3;ctx.fillStyle=`rgba(220,230,255,${tw*stA})`;ctx.beginPath();ctx.arc(sx,s.y,s.size,0,Math.PI*2);ctx.fill();}
+
+  // 우주
+  const spA=zone===2?t:(zone>=3?1:0);
+  if(spA>0)for(const obj of bgObjects){const ox=((obj.x-cameraX*obj.parallax)%(W*5)+W*5)%(W*5)-W*0.3;if(ox<-obj.size*2||ox>W+obj.size*2)continue;ctx.save();ctx.globalAlpha=spA*0.6;if(obj.type==='planet'){const pg=ctx.createRadialGradient(ox-obj.size*0.2,obj.y-obj.size*0.2,obj.size*0.1,ox,obj.y,obj.size);pg.addColorStop(0,obj.color);pg.addColorStop(1,'rgba(0,0,0,0.6)');ctx.fillStyle=pg;ctx.beginPath();ctx.arc(ox,obj.y,obj.size,0,Math.PI*2);ctx.fill();}ctx.restore();}
+
+  // 배경 산
+  const mtA=zone<=1?1:(zone===2?Math.max(0,1-t):0);
+  if(mtA>0){ctx.globalAlpha=mtA*0.35;for(const m of bgMountains){const mx=m.x-cameraX*m.parallax;if(mx<-m.w-50||mx>W+50)continue;ctx.fillStyle=m.color;ctx.beginPath();ctx.moveTo(mx,H);ctx.lineTo(mx+m.w/2,H-m.h);ctx.lineTo(mx+m.w,H);ctx.closePath();ctx.fill();}ctx.globalAlpha=1;}
+
+  // === 월드 ===
+  ctx.save();
+  ctx.translate(-cameraX,0);
+
+  // 장식물
+  for(const d of terrainDecorations){
+    const sx=d.x-cameraX;if(sx<-100||sx>W+100)continue;
+    switch(d.type){
+      case 'tree':ctx.fillStyle='#5c4033';ctx.fillRect(d.x-3,d.y-d.h,6,d.h);ctx.fillStyle='#2d8a4e';ctx.beginPath();ctx.arc(d.x,d.y-d.h,14+d.h*0.25,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3da863';ctx.beginPath();ctx.arc(d.x-4,d.y-d.h-3,9+d.h*0.15,0,Math.PI*2);ctx.fill();break;
+      case 'pine':ctx.fillStyle='#5c4033';ctx.fillRect(d.x-2,d.y-d.h*0.3,4,d.h*0.3);ctx.fillStyle='#1a6e3a';for(let i=0;i<3;i++){const ly=d.y-d.h*0.3-i*(d.h*0.25),lw=14-i*3;ctx.beginPath();ctx.moveTo(d.x-lw,ly);ctx.lineTo(d.x,ly-d.h*0.28);ctx.lineTo(d.x+lw,ly);ctx.closePath();ctx.fill();}break;
+      case 'bush':ctx.fillStyle='#3a8a4a';ctx.beginPath();ctx.ellipse(d.x,d.y-d.h/2,d.w/2,d.h/2,0,0,Math.PI*2);ctx.fill();break;
+      case 'grass':ctx.strokeStyle='rgba(80,180,80,0.7)';ctx.lineWidth=1.5;const sw=Math.sin(now*0.002+d.x*0.1)*3;ctx.beginPath();ctx.moveTo(d.x,d.y);ctx.quadraticCurveTo(d.x+sw,d.y-d.h*0.6,d.x+sw*1.3,d.y-d.h);ctx.stroke();break;
+      case 'rock':ctx.fillStyle='#7a7a7a';ctx.beginPath();ctx.moveTo(d.x,d.y);ctx.lineTo(d.x+d.w*0.3,d.y-d.h);ctx.lineTo(d.x+d.w*0.7,d.y-d.h*0.8);ctx.lineTo(d.x+d.w,d.y);ctx.closePath();ctx.fill();break;
+      case 'cactus':ctx.fillStyle='#2d8a4e';ctx.fillRect(d.x-3,d.y-d.h,6,d.h);ctx.fillRect(d.x-9,d.y-d.h*0.7,6,d.h*0.25);ctx.fillRect(d.x+3,d.y-d.h*0.5,6,d.h*0.2);break;
+      case 'crystal':ctx.fillStyle=d.color;ctx.globalAlpha=0.7+Math.sin(now*0.003+d.x)*0.2;ctx.beginPath();ctx.moveTo(d.x,d.y);ctx.lineTo(d.x-4,d.y-d.h*0.6);ctx.lineTo(d.x,d.y-d.h);ctx.lineTo(d.x+4,d.y-d.h*0.6);ctx.closePath();ctx.fill();ctx.globalAlpha=1;break;
+      case 'sign':ctx.fillStyle='#8B4513';ctx.fillRect(d.x-1.5,d.y-25,3,25);ctx.fillStyle='#f5deb3';ctx.fillRect(d.x-12,d.y-27,24,12);ctx.fillStyle='#333';ctx.font='bold 7px sans-serif';ctx.textAlign='center';ctx.fillText(d.text,d.x,d.y-19);break;
+    }
+  }
+
+  // === 지형 렌더링 ===
+  const startSeg=Math.max(0,Math.floor(cameraX/SEGMENT_W)-2);
+  const endSeg=Math.min(terrain.length-1,Math.ceil((cameraX+W)/SEGMENT_W)+2);
+
+  // 흙 지형 (채우기)
+  ctx.beginPath();
+  let firstGround=true;
+  for(let i=startSeg;i<=endSeg;i++){
+    const seg=terrain[i];
+    if(!seg||seg.type==='gap')continue;
+    const px=i*SEGMENT_W;
+    if(firstGround){ctx.moveTo(px,seg.y);firstGround=false;}
+    else ctx.lineTo(px,seg.y);
+  }
+  // 아래쪽으로 닫기
+  if(!firstGround){
+    ctx.lineTo(endSeg*SEGMENT_W,H+50);
+    ctx.lineTo(startSeg*SEGMENT_W,H+50);
+    ctx.closePath();
+    // 흙 그라디언트
+    const earthGrad=ctx.createLinearGradient(0,H-150,0,H+50);
+    earthGrad.addColorStop(0,'#5a8a3a'); // 잔디
+    earthGrad.addColorStop(0.08,'#4a7a30');
+    earthGrad.addColorStop(0.15,'#7a5a3a'); // 흙
+    earthGrad.addColorStop(0.5,'#5a4030');
+    earthGrad.addColorStop(1,'#3a2a1a');
+    ctx.fillStyle=earthGrad;
+    ctx.fill();
+  }
+
+  // 잔디 윤곽선
+  ctx.beginPath();
+  firstGround=true;
+  for(let i=startSeg;i<=endSeg;i++){
+    const seg=terrain[i];
+    if(!seg||seg.type==='gap'){firstGround=true;continue;}
+    const px=i*SEGMENT_W;
+    if(firstGround){ctx.moveTo(px,seg.y);firstGround=false;}
+    else ctx.lineTo(px,seg.y);
+  }
+  ctx.strokeStyle='#6aaa44';
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  // 램프 표시 (다른 색)
+  for(let i=startSeg;i<=endSeg;i++){
+    const seg=terrain[i];
+    if(!seg||seg.type!=='ramp'&&seg.type!=='ramp_tip')continue;
+    const px=i*SEGMENT_W;
+    ctx.fillStyle=seg.type==='ramp_tip'?'rgba(255,200,50,0.4)':'rgba(255,180,50,0.2)';
+    ctx.fillRect(px,seg.y-3,SEGMENT_W+1,6);
+  }
+
+  // 깃발 (레벨 모드)
+  if(currentLevel){const fx=currentLevel.targetDist*10;const fsx=fx-cameraX;if(fsx>-50&&fsx<W+50){ctx.fillStyle='#ccc';ctx.fillRect(fx,getTerrainY(fx)-80,3,80);ctx.fillStyle=currentLevel.color;ctx.beginPath();ctx.moveTo(fx+3,getTerrainY(fx)-80);ctx.lineTo(fx+40,getTerrainY(fx)-68);ctx.lineTo(fx+3,getTerrainY(fx)-56);ctx.closePath();ctx.fill();}}
+
+  // 배기 트레일
+  for(const tr of bike.trail){ctx.fillStyle=`rgba(180,180,180,${tr.life*0.4})`;ctx.beginPath();ctx.arc(tr.x,tr.y,tr.size*tr.life,0,Math.PI*2);ctx.fill();}
+
+  // === 오토바이 ===
+  const skin=getCurrentSkin();
+  const bcx=bike.x+bike.w/2,bcy=bike.y+bike.h/2+bike.suspOffset;
+  ctx.save();
+  ctx.translate(bcx,bcy);
+  ctx.rotate(bike.angle);
+
+  const wR=9;
+  // 뒷바퀴
+  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(-14,8,wR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#444';ctx.beginPath();ctx.arc(-14,8,wR-3,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#666';ctx.lineWidth=1;for(let i=0;i<4;i++){const a=bike.wheelRot+i*Math.PI/2;ctx.beginPath();ctx.moveTo(-14,8);ctx.lineTo(-14+Math.cos(a)*(wR-3),8+Math.sin(a)*(wR-3));ctx.stroke();}
+  ctx.fillStyle='#888';ctx.beginPath();ctx.arc(-14,8,2,0,Math.PI*2);ctx.fill();
+  // 앞바퀴
+  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(16,8,wR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#444';ctx.beginPath();ctx.arc(16,8,wR-3,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#666';ctx.lineWidth=1;for(let i=0;i<4;i++){const a=bike.wheelRot+i*Math.PI/2;ctx.beginPath();ctx.moveTo(16,8);ctx.lineTo(16+Math.cos(a)*(wR-3),8+Math.sin(a)*(wR-3));ctx.stroke();}
+  ctx.fillStyle='#888';ctx.beginPath();ctx.arc(16,8,2,0,Math.PI*2);ctx.fill();
+  // 프레임
+  ctx.strokeStyle='#333';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-14,8);ctx.lineTo(-3,-5);ctx.lineTo(16,8);ctx.stroke();ctx.beginPath();ctx.moveTo(-3,-5);ctx.lineTo(10,-7);ctx.stroke();
+  // 바디
+  ctx.fillStyle=skin.bodyColor;ctx.beginPath();ctx.moveTo(-10,-6);ctx.lineTo(8,-10);ctx.lineTo(12,-5);ctx.lineTo(4,2);ctx.lineTo(-8,2);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.beginPath();ctx.moveTo(-8,-5);ctx.lineTo(6,-9);ctx.lineTo(9,-6);ctx.lineTo(-5,-3);ctx.closePath();ctx.fill();
+  // 엔진
+  ctx.fillStyle=skin.accentColor;ctx.beginPath();ctx.roundRect(-6,0,14,5,2);ctx.fill();
+  // 시트
+  ctx.fillStyle='#1a1a1a';ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(2,-12);ctx.lineTo(5,-8);ctx.lineTo(-6,-6);ctx.closePath();ctx.fill();
+  // 핸들
+  ctx.strokeStyle='#aaa';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(11,-7);ctx.lineTo(16,-14);ctx.stroke();ctx.beginPath();ctx.moveTo(14,-14);ctx.lineTo(18,-14);ctx.stroke();
+  // 헤드라이트
+  ctx.fillStyle='rgba(255,255,200,0.9)';ctx.beginPath();ctx.arc(17,-4,2.5,0,Math.PI*2);ctx.fill();
+  if(bike.vx>3){const hl=ctx.createRadialGradient(20,-4,0,20,-4,35);hl.addColorStop(0,'rgba(255,255,200,0.12)');hl.addColorStop(1,'rgba(255,255,200,0)');ctx.fillStyle=hl;ctx.fillRect(17,-22,45,36);}
+  // 배기관+불꽃
+  ctx.strokeStyle='#666';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-12,4);ctx.lineTo(-20,7);ctx.stroke();
+  if(keys['ArrowRight']||keys['KeyD']){ctx.fillStyle=`rgba(255,${100+Math.random()*100},0,${0.5+Math.random()*0.3})`;ctx.beginPath();ctx.arc(-22+Math.random()*3,7+Math.random()*3,2+Math.random()*2.5,0,Math.PI*2);ctx.fill();}
+  // 라이더
+  ctx.fillStyle='#333';ctx.beginPath();ctx.moveTo(-3,-12);ctx.lineTo(1,-20);ctx.lineTo(5,-18);ctx.lineTo(3,-10);ctx.closePath();ctx.fill();
+  ctx.fillStyle=skin.bodyColor;ctx.beginPath();ctx.arc(2,-22,5.5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(100,200,255,0.4)';ctx.beginPath();ctx.arc(4,-21,3,-0.5,1);ctx.fill();
+  ctx.strokeStyle='#333';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(3,-16);ctx.lineTo(12,-12);ctx.stroke();
+  ctx.restore();
+
+  // 파티클
+  for(const pt of particles){ctx.fillStyle=pt.color;ctx.globalAlpha=pt.life;ctx.beginPath();ctx.arc(pt.x,pt.y,pt.size*pt.life,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  // === 플립 콤보 텍스트 ===
+  if(flipComboTimer>0){
+    ctx.save();
+    ctx.globalAlpha=Math.min(1,flipComboTimer/30);
+    ctx.fillStyle='#ffd700';
+    ctx.font='bold 32px sans-serif';
+    ctx.textAlign='center';
+    ctx.shadowColor='#ff8800';ctx.shadowBlur=15;
+    ctx.fillText(flipComboText,W/2,H*0.35-((90-flipComboTimer)*0.5));
+    ctx.shadowBlur=0;
+    ctx.restore();
+  }
+
+  // 공중 회전 카운터
+  if(!bike.onGround&&wasAirborne){
+    const flips=Math.floor(Math.abs(currentRotation)/(Math.PI*2));
+    const partial=Math.abs(currentRotation)%(Math.PI*2)/(Math.PI*2);
+    if(flips>0||partial>0.3){
+      ctx.save();
+      ctx.fillStyle='rgba(255,255,255,0.8)';
+      ctx.font='bold 20px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(`${flips>0?flips+'x ':''}${Math.floor(partial*360)}°`,W/2,80);
+      ctx.restore();
+    }
+  }
+
+  // === 배너 ===
+  if(levelBanner){
+    const b=levelBanner,pr=b.timer/150;let al,sl;
+    if(pr>0.85){const tt=(1-pr)/0.15;al=tt;sl=-40+tt*40;}else if(pr<0.15){const tt=pr/0.15;al=tt;sl=0;}else{al=1;sl=0;}
+    const bY=H*0.2+sl;ctx.save();ctx.globalAlpha=al;
+    ctx.fillStyle='rgba(0,0,0,0.65)';const bW2=320,bH2=70,bX2=(W-bW2)/2;
+    ctx.beginPath();ctx.roundRect(bX2,bY-bH2/2,bW2,bH2,16);ctx.fill();
+    ctx.strokeStyle=b.color;ctx.lineWidth=3;ctx.shadowColor=b.color;ctx.shadowBlur=15;
+    ctx.beginPath();ctx.roundRect(bX2,bY-bH2/2,bW2,bH2,16);ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle='#fff';ctx.font='bold 24px sans-serif';ctx.textAlign='center';ctx.fillText(`🎉 ${b.text}`,W/2,bY-5);
+    ctx.fillStyle=b.color;ctx.font='15px sans-serif';ctx.fillText(b.subtext,W/2,bY+20);
+    ctx.restore();
+  }
+
+  // === HUD ===
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,0,W,44);
+  ctx.fillStyle='#fff';ctx.font='bold 20px sans-serif';ctx.textAlign='left';
+  ctx.fillText(`🏍️ ${Math.floor(distanceTraveled)}m`,15,30);
+
+  // 속도계
+  const spd=Math.abs(bike.vx);const spdPct=spd/bike.maxSpeed;
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(150,19,60,7);
+  ctx.fillStyle=spdPct>0.7?'#ff4444':(spdPct>0.4?'#ffaa44':'#4ade80');
+  ctx.fillRect(150,19,60*spdPct,7);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='10px sans-serif';
+  ctx.fillText(`${Math.floor(spd*10)}km/h`,152,16);
+
+  // 회전 수
+  ctx.fillStyle='#ffd700';ctx.font='bold 14px sans-serif';
+  ctx.fillText(`🔄 ${totalFlips}`,220,30);
+
+  // 구간
+  const zN=['하늘','석양','밤하늘','우주'],zE=['☁️','🌅','🌙','🚀'];const cZ=getZone(bgDist);
+  ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='14px sans-serif';ctx.fillText(`${zE[cZ]} ${zN[cZ]}`,W/2,30);
+
+  if(currentLevel){
+    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='12px sans-serif';
+    ctx.fillText(`Lv.${currentLevel.id} ${currentLevel.name} | 목표: ${currentLevel.targetDist}m`,W/2,15);
+    const bW3=200,bH3=4,bX3=(W-bW3)/2,bY3=38;
+    ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(bX3,bY3,bW3,bH3);
+    const pg=Math.min(distanceTraveled/currentLevel.targetDist,1);
+    ctx.fillStyle=pg>=1?'#4ade80':'#4facfe';ctx.fillRect(bX3,bY3,bW3*pg,bH3);
+  }
+
+  ctx.textAlign='right';ctx.fillStyle='#ffd700';ctx.font='14px sans-serif';
+  ctx.fillText(`💰 ${gameData.coins+Math.floor(distanceTraveled/10)+totalFlips*5}`,W-15,30);
+
+  // 게이지
+  const gH=H-80,gX=W-10;
+  ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fillRect(gX,50,5,gH);
+  const tD=currentLevel?currentLevel.targetDist:500;
+  const r2=Math.min(distanceTraveled/tD,1);
+  const gg=ctx.createLinearGradient(0,50+gH,0,50);gg.addColorStop(0,'#ff9a44');gg.addColorStop(1,'#fc6076');
+  ctx.fillStyle=gg;ctx.fillRect(gX,50+gH*(1-r2),5,gH*r2);
+}
+
+function gameLoop(){if(!gameRunning)return;update();draw();requestAnimationFrame(gameLoop);}
+document.addEventListener('keydown',e=>{if(e.code==='Escape'&&gameRunning){gameRunning=false;showScreen('mainMenu');}});
+createBgObjects();draw();showScreen('mainMenu');
+</script>
+</body>
+</html>

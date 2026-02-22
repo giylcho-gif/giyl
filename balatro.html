@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Balatro - 포커 로그라이크</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+body{background:#1a1a2e;font-family:'Noto Sans KR',sans-serif;overflow:hidden;user-select:none;display:flex;justify-content:center;align-items:center;height:100vh;color:#fff}
+#game{width:1200px;height:800px;position:relative;background:linear-gradient(135deg,#16213e 0%,#0f3460 50%,#1a1a2e 100%);border-radius:20px;overflow:hidden;box-shadow:0 0 60px rgba(0,100,255,0.3)}
+
+/* 배경 패턴 */
+#game::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-conic-gradient(rgba(255,255,255,0.02) 0% 25%,transparent 0% 50%) 0 0/60px 60px;pointer-events:none;z-index:0}
+
+/* 타이틀 화면 */
+#title-screen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:100;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)}
+#title-screen h1{font-size:120px;font-weight:900;background:linear-gradient(135deg,#e94560,#ff6b6b,#ffd93d,#e94560);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;filter:drop-shadow(0 4px 20px rgba(233,69,96,0.5));letter-spacing:-3px;margin-bottom:10px}
+#title-screen .subtitle{font-size:22px;color:#a0a0c0;margin-bottom:60px;letter-spacing:8px}
+#title-screen .start-btn{padding:18px 60px;font-size:24px;font-weight:700;background:linear-gradient(135deg,#e94560,#c0392b);color:#fff;border:none;border-radius:50px;cursor:pointer;transition:all 0.3s;box-shadow:0 4px 20px rgba(233,69,96,0.4)}
+#title-screen .start-btn:hover{transform:scale(1.08);box-shadow:0 6px 30px rgba(233,69,96,0.6)}
+
+/* 상단 정보 바 */
+#top-bar{position:absolute;top:0;left:0;right:0;height:80px;display:flex;justify-content:space-between;align-items:center;padding:0 30px;z-index:10;background:rgba(0,0,0,0.3);backdrop-filter:blur(10px)}
+.info-box{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:8px 20px;display:flex;flex-direction:column;align-items:center}
+.info-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px}
+.info-value{font-size:22px;font-weight:900;color:#ffd93d}
+.info-value.red{color:#e94560}
+.info-value.blue{color:#4fc3f7}
+.info-value.green{color:#66bb6a}
+
+/* 핸드 영역 */
+#hand-area{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10;perspective:1000px;min-height:200px;align-items:flex-end}
+
+/* 카드 */
+.card{width:100px;height:150px;border-radius:12px;background:#fff;position:relative;cursor:pointer;transition:all 0.2s ease;box-shadow:0 4px 15px rgba(0,0,0,0.3);display:flex;flex-direction:column;justify-content:space-between;padding:8px}
+.card:hover{transform:translateY(-15px);box-shadow:0 8px 25px rgba(0,0,0,0.4)}
+.card.selected{transform:translateY(-35px);box-shadow:0 12px 35px rgba(233,69,96,0.5);border:3px solid #e94560}
+.card .suit-top{font-size:14px;font-weight:700;display:flex;align-items:center;gap:4px}
+.card .suit-center{font-size:42px;text-align:center;flex:1;display:flex;justify-content:center;align-items:center}
+.card .suit-bottom{font-size:14px;font-weight:700;display:flex;align-items:center;gap:4px;transform:rotate(180deg)}
+.card.hearts .suit-top,.card.hearts .suit-bottom,.card.hearts .suit-center{color:#e94560}
+.card.diamonds .suit-top,.card.diamonds .suit-bottom,.card.diamonds .suit-center{color:#e94560}
+.card.clubs .suit-top,.card.clubs .suit-bottom,.card.clubs .suit-center{color:#2c3e50}
+.card.spades .suit-top,.card.spades .suit-bottom,.card.spades .suit-center{color:#2c3e50}
+
+/* 조커 슬롯 */
+#joker-area{position:absolute;top:90px;left:30px;display:flex;gap:10px;z-index:10}
+.joker-slot{width:90px;height:130px;border-radius:12px;background:rgba(255,255,255,0.05);border:2px dashed rgba(255,255,255,0.15);display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:11px;color:#666}
+.joker-card{width:90px;height:130px;border-radius:12px;background:linear-gradient(135deg,#e94560,#c0392b);display:flex;flex-direction:column;justify-content:center;align-items:center;box-shadow:0 4px 15px rgba(233,69,96,0.4);cursor:help;position:relative}
+.joker-card .joker-icon{font-size:36px}
+.joker-card .joker-name{font-size:10px;color:#fff;font-weight:700;margin-top:4px;text-align:center;padding:0 4px}
+.joker-card .joker-desc{font-size:8px;color:rgba(255,255,255,0.7);text-align:center;padding:0 6px;margin-top:2px}
+
+/* 점수 표시 */
+#score-display{position:absolute;top:90px;right:30px;z-index:10;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+#hand-type{font-size:28px;font-weight:900;color:#ffd93d;text-shadow:0 2px 10px rgba(255,217,61,0.5);opacity:0;transition:opacity 0.3s}
+#hand-type.show{opacity:1}
+#score-calc{font-size:16px;color:#aaa;opacity:0;transition:opacity 0.3s}
+#score-calc.show{opacity:1}
+#score-anim{font-size:60px;font-weight:900;color:#e94560;text-shadow:0 4px 20px rgba(233,69,96,0.5);opacity:0;transition:all 0.5s}
+#score-anim.show{opacity:1;transform:scale(1.2)}
+
+/* 버튼 */
+#action-btns{position:absolute;bottom:200px;right:30px;display:flex;flex-direction:column;gap:10px;z-index:10}
+.action-btn{padding:14px 28px;font-size:16px;font-weight:700;border:none;border-radius:12px;cursor:pointer;transition:all 0.2s;font-family:'Noto Sans KR',sans-serif}
+.action-btn:hover{transform:scale(1.05)}
+.action-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none}
+#play-btn{background:linear-gradient(135deg,#e94560,#c0392b);color:#fff;box-shadow:0 4px 15px rgba(233,69,96,0.4)}
+#discard-btn{background:linear-gradient(135deg,#4fc3f7,#0288d1);color:#fff;box-shadow:0 4px 15px rgba(79,195,247,0.4)}
+#sort-btn{background:rgba(255,255,255,0.1);color:#aaa;border:1px solid rgba(255,255,255,0.15)}
+
+/* 라운드 정보 */
+#round-info{position:absolute;top:100px;left:50%;transform:translateX(-50%);z-index:10;text-align:center}
+#round-info .blind-name{font-size:20px;font-weight:900;color:#ffd93d;text-shadow:0 2px 10px rgba(255,217,61,0.3)}
+#round-info .blind-score{font-size:14px;color:#aaa;margin-top:4px}
+#score-bar{width:300px;height:12px;background:rgba(255,255,255,0.1);border-radius:6px;margin-top:8px;overflow:hidden}
+#score-bar-fill{height:100%;background:linear-gradient(90deg,#e94560,#ffd93d);border-radius:6px;transition:width 0.5s;width:0%}
+
+/* 상점 */
+#shop-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);z-index:50;display:none;flex-direction:column;align-items:center;padding:40px}
+#shop-screen h2{font-size:42px;font-weight:900;color:#ffd93d;margin-bottom:30px}
+#shop-items{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin-bottom:30px}
+.shop-item{width:140px;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);border-radius:16px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s}
+.shop-item:hover{border-color:#e94560;transform:translateY(-5px);box-shadow:0 8px 25px rgba(233,69,96,0.3)}
+.shop-item .item-icon{font-size:40px;margin-bottom:8px}
+.shop-item .item-name{font-size:13px;font-weight:700;margin-bottom:4px;color:#fff}
+.shop-item .item-desc{font-size:10px;color:#888;margin-bottom:8px;min-height:30px}
+.shop-item .item-price{font-size:16px;font-weight:900;color:#ffd93d}
+#shop-skip{margin-top:20px;padding:14px 40px;font-size:18px;font-weight:700;background:rgba(255,255,255,0.1);color:#aaa;border:1px solid rgba(255,255,255,0.2);border-radius:12px;cursor:pointer;transition:all 0.2s}
+#shop-skip:hover{background:rgba(255,255,255,0.15);color:#fff}
+#shop-reroll{padding:10px 24px;font-size:14px;font-weight:700;background:linear-gradient(135deg,#4fc3f7,#0288d1);color:#fff;border:none;border-radius:10px;cursor:pointer;margin-bottom:20px}
+
+/* 블라인드 선택 */
+#blind-select{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);z-index:50;display:none;flex-direction:column;justify-content:center;align-items:center}
+#blind-select h2{font-size:36px;font-weight:900;color:#ffd93d;margin-bottom:40px}
+#blind-options{display:flex;gap:30px}
+.blind-option{width:200px;padding:30px 20px;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.15);border-radius:20px;text-align:center;cursor:pointer;transition:all 0.3s}
+.blind-option:hover{border-color:#e94560;transform:translateY(-8px);box-shadow:0 12px 35px rgba(233,69,96,0.3)}
+.blind-option .blind-icon{font-size:50px;margin-bottom:12px}
+.blind-option .blind-title{font-size:18px;font-weight:900;margin-bottom:8px}
+.blind-option .blind-req{font-size:14px;color:#e94560;font-weight:700}
+.blind-option .blind-reward{font-size:12px;color:#66bb6a;margin-top:8px}
+.blind-option.boss{border-color:rgba(233,69,96,0.3)}
+.blind-option.boss .blind-title{color:#e94560}
+
+/* 게임오버 */
+#gameover{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:100;display:none;flex-direction:column;justify-content:center;align-items:center;backdrop-filter:blur(10px)}
+#gameover h2{font-size:60px;font-weight:900;color:#e94560;margin-bottom:20px}
+#gameover .final-score{font-size:24px;color:#ffd93d;margin-bottom:40px}
+#gameover button{padding:16px 50px;font-size:20px;font-weight:700;background:linear-gradient(135deg,#e94560,#c0392b);color:#fff;border:none;border-radius:50px;cursor:pointer}
+
+/* 승리 */
+#victory{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:100;display:none;flex-direction:column;justify-content:center;align-items:center;backdrop-filter:blur(10px)}
+#victory h2{font-size:60px;font-weight:900;background:linear-gradient(135deg,#ffd93d,#ff6b6b,#4fc3f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:20px}
+#victory .final-score{font-size:24px;color:#ffd93d;margin-bottom:40px}
+#victory button{padding:16px 50px;font-size:20px;font-weight:700;background:linear-gradient(135deg,#ffd93d,#ff9800);color:#1a1a2e;border:none;border-radius:50px;cursor:pointer}
+
+/* 툴팁 */
+#tooltip{position:absolute;background:rgba(20,20,40,0.95);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px 16px;font-size:12px;color:#ddd;max-width:220px;z-index:200;pointer-events:none;display:none;backdrop-filter:blur(10px)}
+#tooltip .tt-title{font-weight:900;color:#ffd93d;font-size:14px;margin-bottom:4px}
+
+/* 핸드 정보 패널 */
+#hand-info{position:absolute;bottom:200px;left:30px;z-index:10;background:rgba(0,0,0,0.3);border-radius:12px;padding:12px 16px;backdrop-filter:blur(5px)}
+#hand-info .hi-label{font-size:11px;color:#888;letter-spacing:1px}
+#hand-info .hi-hands,.hi-discards{font-size:20px;font-weight:900;margin-top:2px}
+.hi-hands{color:#4fc3f7}
+.hi-discards{color:#e94560}
+
+/* 스코어 플라이 애니메이션 */
+@keyframes scoreFly{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-80px) scale(1.5)}}
+.score-fly{position:absolute;font-size:32px;font-weight:900;color:#ffd93d;pointer-events:none;animation:scoreFly 1s ease-out forwards;z-index:100;text-shadow:0 2px 10px rgba(255,217,61,0.5)}
+
+/* 카드 딜 애니메이션 */
+@keyframes cardDeal{0%{opacity:0;transform:translateY(50px) rotate(10deg)}100%{opacity:1;transform:translateY(0) rotate(0)}}
+.card.dealing{animation:cardDeal 0.3s ease-out forwards}
+
+/* 칩 카운트 애니메이션 */
+@keyframes chipPop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+.chip-pop{animation:chipPop 0.3s ease}
+
+</style>
+</head>
+<body>
+
+<div id="game">
+  <!-- 타이틀 -->
+  <div id="title-screen">
+    <h1>BALATRO</h1>
+    <div class="subtitle">포커 로그라이크</div>
+    <button class="start-btn" onclick="startGame()">게임 시작</button>
+  </div>
+
+  <!-- 상단바 -->
+  <div id="top-bar" style="display:none">
+    <div class="info-box">
+      <span class="info-label">라운드</span>
+      <span class="info-value blue" id="round-num">1</span>
+    </div>
+    <div class="info-box">
+      <span class="info-label">앤티</span>
+      <span class="info-value red" id="ante-num">1</span>
+    </div>
+    <div class="info-box">
+      <span class="info-label">점수</span>
+      <span class="info-value" id="total-score">0</span>
+    </div>
+    <div class="info-box">
+      <span class="info-label">머니</span>
+      <span class="info-value green" id="money">$4</span>
+    </div>
+  </div>
+
+  <!-- 조커 -->
+  <div id="joker-area" style="display:none">
+    <div class="joker-slot"><span>조커</span><span>슬롯</span></div>
+    <div class="joker-slot"><span>조커</span><span>슬롯</span></div>
+    <div class="joker-slot"><span>조커</span><span>슬롯</span></div>
+    <div class="joker-slot"><span>조커</span><span>슬롯</span></div>
+    <div class="joker-slot"><span>조커</span><span>슬롯</span></div>
+  </div>
+
+  <!-- 라운드 정보 -->
+  <div id="round-info" style="display:none">
+    <div class="blind-name" id="blind-name">Small Blind</div>
+    <div class="blind-score">목표: <span id="target-score">300</span></div>
+    <div id="score-bar"><div id="score-bar-fill"></div></div>
+  </div>
+
+  <!-- 점수 표시 -->
+  <div id="score-display" style="display:none">
+    <div id="hand-type"></div>
+    <div id="score-calc"></div>
+    <div id="score-anim"></div>
+  </div>
+
+  <!-- 핸드 정보 -->
+  <div id="hand-info" style="display:none">
+    <div class="hi-label">남은 핸드</div>
+    <div class="hi-hands" id="hands-left">4</div>
+    <div class="hi-label" style="margin-top:8px">남은 버리기</div>
+    <div class="hi-discards" id="discards-left">3</div>
+  </div>
+
+  <!-- 카드 핸드 -->
+  <div id="hand-area"></div>
+
+  <!-- 액션 버튼 -->
+  <div id="action-btns" style="display:none">
+    <button class="action-btn" id="play-btn" onclick="playHand()">핸드 플레이</button>
+    <button class="action-btn" id="discard-btn" onclick="discardCards()">버리기</button>
+    <button class="action-btn" id="sort-btn" onclick="sortHand()">정렬</button>
+  </div>
+
+  <!-- 블라인드 선택 -->
+  <div id="blind-select"></div>
+
+  <!-- 상점 -->
+  <div id="shop-screen">
+    <h2>🛒 상점</h2>
+    <button id="shop-reroll" onclick="rerollShop()">리롤 ($5)</button>
+    <div id="shop-items"></div>
+    <button id="shop-skip" onclick="skipShop()">다음 라운드 →</button>
+  </div>
+
+  <!-- 게임오버 -->
+  <div id="gameover">
+    <h2>GAME OVER</h2>
+    <div class="final-score" id="go-score"></div>
+    <button onclick="location.reload()">다시 하기</button>
+  </div>
+
+  <!-- 승리 -->
+  <div id="victory">
+    <h2>승리!</h2>
+    <div class="final-score" id="vic-score"></div>
+    <button onclick="location.reload()">다시 하기</button>
+  </div>
+
+  <!-- 툴팁 -->
+  <div id="tooltip"><div class="tt-title"></div><div class="tt-desc"></div></div>
+</div>
+
+<script>
+// =================== 게임 상태 ===================
+const G = {
+  ante: 1,
+  maxAnte: 8,
+  round: 1,
+  roundScore: 0,
+  targetScore: 300,
+  totalScore: 0,
+  money: 4,
+  hands: 4,
+  maxHands: 4,
+  discards: 3,
+  maxDiscards: 3,
+  handSize: 8,
+  deck: [],
+  hand: [],
+  selected: [],
+  jokers: [],
+  maxJokers: 5,
+  phase: 'title', // title, blind_select, play, shop, gameover, victory
+  sortMode: 'rank', // rank or suit
+};
+
+// =================== 카드 데이터 ===================
+const SUITS = ['hearts','diamonds','clubs','spades'];
+const SUIT_SYMBOLS = {hearts:'♥',diamonds:'♦',clubs:'♣',spades:'♠'};
+const SUIT_NAMES = {hearts:'하트',diamonds:'다이아',clubs:'클로버',spades:'스페이드'};
+const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const RANK_VALUES = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':10,'Q':10,'K':10,'A':11};
+
+// =================== 포커 핸드 정의 ===================
+const HAND_TYPES = {
+  'Royal Flush':     {chips:100, mult:8, level:1, desc:'같은 무늬 10-J-Q-K-A'},
+  'Straight Flush':  {chips:100, mult:8, level:1, desc:'같은 무늬 연속 5장'},
+  'Four of a Kind':  {chips:60,  mult:7, level:1, desc:'같은 숫자 4장'},
+  'Full House':      {chips:40,  mult:4, level:1, desc:'3장 + 2장'},
+  'Flush':           {chips:35,  mult:4, level:1, desc:'같은 무늬 5장'},
+  'Straight':        {chips:30,  mult:4, level:1, desc:'연속된 숫자 5장'},
+  'Three of a Kind': {chips:30,  mult:3, level:1, desc:'같은 숫자 3장'},
+  'Two Pair':        {chips:20,  mult:2, level:1, desc:'페어 2개'},
+  'Pair':            {chips:10,  mult:2, level:1, desc:'같은 숫자 2장'},
+  'High Card':       {chips:5,   mult:1, level:1, desc:'가장 높은 카드'},
+};
+
+// 핸드 레벨 (업그레이드 추적)
+let handLevels = {};
+for(let h in HAND_TYPES) handLevels[h] = 1;
+
+// =================== 조커 정의 ===================
+const JOKER_DEFS = [
+  {id:'joker',       name:'조커',       icon:'🃏', desc:'+4 배율',                   rarity:'common', cost:4,  effect:g=>({addMult:4})},
+  {id:'greedy',      name:'탐욕의 조커', icon:'💰', desc:'플레이된 ♦마다 +3 배율',      rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:3*cards.filter(c=>c.suit==='diamonds').length})},
+  {id:'lusty',       name:'정욕의 조커', icon:'❤️', desc:'플레이된 ♥마다 +3 배율',      rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:3*cards.filter(c=>c.suit==='hearts').length})},
+  {id:'wrathful',    name:'분노의 조커', icon:'♠️', desc:'플레이된 ♠마다 +3 배율',      rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:3*cards.filter(c=>c.suit==='spades').length})},
+  {id:'glutton',     name:'폭식의 조커', icon:'♣️', desc:'플레이된 ♣마다 +3 배율',      rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:3*cards.filter(c=>c.suit==='clubs').length})},
+  {id:'scholar',     name:'학자',       icon:'📚', desc:'+20 칩 +4 배율',             rarity:'common', cost:6,  effect:g=>({addChips:20,addMult:4})},
+  {id:'half_joker',  name:'반쪽 조커',   icon:'🎭', desc:'3장 이하 플레이 시 +20 배율', rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:cards.length<=3?20:0})},
+  {id:'banner',      name:'배너',       icon:'🚩', desc:'남은 버리기당 +30 칩',        rarity:'common', cost:5,  effect:g=>({addChips:30*g.discards})},
+  {id:'mystic',      name:'신비의 조커', icon:'🔮', desc:'x1.5 배율',                 rarity:'uncommon',cost:7, effect:g=>({mulMult:1.5})},
+  {id:'steel',       name:'강철 조커',   icon:'⚔️', desc:'+20 칩, 매 핸드',            rarity:'common', cost:5,  effect:g=>({addChips:20})},
+  {id:'fibonacci',   name:'피보나치',    icon:'🌀', desc:'A,2,3,5,8 카드 +8 배율씩',   rarity:'uncommon',cost:8, effect:(g,h,cards)=>{const fibs=[2,3,5,8,14];return{addMult:8*cards.filter(c=>fibs.includes(RANK_VALUES[c.rank])||c.rank==='A').length}}},
+  {id:'even_steven', name:'짝수 스티븐', icon:'2️⃣', desc:'짝수 카드 +4 배율씩',        rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:4*cards.filter(c=>[2,4,6,8,10].includes(RANK_VALUES[c.rank])).length})},
+  {id:'odd_todd',    name:'홀수 토드',   icon:'1️⃣', desc:'홀수 카드 +4 배율씩',        rarity:'common', cost:5,  effect:(g,h,cards)=>({addMult:4*cards.filter(c=>[3,5,7,9,11].includes(RANK_VALUES[c.rank])||c.rank==='A').length})},
+  {id:'blue_joker',  name:'푸른 조커',   icon:'💎', desc:'덱에 남은 카드당 +2 칩',      rarity:'common', cost:5,  effect:g=>({addChips:2*g.deck.length})},
+  {id:'stencil',     name:'스텐실',      icon:'📐', desc:'빈 조커 슬롯당 x1 배율',     rarity:'uncommon',cost:8, effect:g=>({mulMult:1+(g.maxJokers-g.jokers.length)})},
+  {id:'supernova',   name:'초신성',      icon:'💫', desc:'이번 라운드 플레이 횟수당 +1 배율', rarity:'common', cost:5, effect:g=>({addMult:(g.maxHands-g.hands)})},
+];
+
+// =================== 블라인드 ===================
+function getAnteScores(ante) {
+  const base = [300, 450, 600, 800, 1000, 1300, 1600, 2000];
+  const b = base[Math.min(ante-1, base.length-1)];
+  return { small: b, big: Math.floor(b*1.5), boss: b*2 };
+}
+
+const BOSS_BLINDS = [
+  {name:'The Hook',    icon:'🪝', desc:'플레이 시 랜덤 2장 버려짐',  effect:'hook'},
+  {name:'The Wall',    icon:'🧱', desc:'목표 점수 2배',            effect:'wall'},
+  {name:'The Needle',  icon:'🪡', desc:'핸드 1회만 가능',          effect:'needle'},
+  {name:'The Psychic', icon:'🧠', desc:'5장을 반드시 플레이',       effect:'psychic'},
+  {name:'The Eye',     icon:'👁️', desc:'같은 핸드 타입 반복 불가',  effect:'eye'},
+  {name:'The Mouth',   icon:'👄', desc:'한 핸드 타입만 사용 가능',   effect:'mouth'},
+];
+
+let currentBoss = null;
+let bossUsedTypes = [];
+let bossLockedType = null;
+
+// =================== 덱 생성 ===================
+function createDeck() {
+  const deck = [];
+  for(const suit of SUITS) {
+    for(const rank of RANKS) {
+      deck.push({suit, rank, id: `${rank}_${suit}_${Math.random().toString(36).substr(2,5)}`});
+    }
+  }
+  return shuffle(deck);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.random()*i+1|0;[a[i],a[j]]=[a[j],a[i]]}
+  return a;
+}
+
+// =================== 게임 시작 ===================
+function startGame() {
+  document.getElementById('title-screen').style.display='none';
+  G.deck = createDeck();
+  G.ante = 1;
+  G.round = 1;
+  G.money = 4;
+  G.totalScore = 0;
+  G.jokers = [];
+  G.hands = G.maxHands;
+  G.discards = G.maxDiscards;
+  for(let h in HAND_TYPES) handLevels[h] = 1;
+  showBlindSelect();
+}
+
+// =================== 블라인드 선택 ===================
+function showBlindSelect() {
+  G.phase = 'blind_select';
+  const el = document.getElementById('blind-select');
+  const scores = getAnteScores(G.ante);
+
+  // 보스 선택
+  currentBoss = BOSS_BLINDS[Math.floor(Math.random()*BOSS_BLINDS.length)];
+  bossUsedTypes = [];
+  bossLockedType = null;
+
+  el.innerHTML = `
+    <h2>앤티 ${G.ante} - 블라인드 선택</h2>
+    <div id="blind-options">
+      <div class="blind-option" onclick="selectBlind('small')">
+        <div class="blind-icon">🔵</div>
+        <div class="blind-title">Small Blind</div>
+        <div class="blind-req">목표: ${scores.small}</div>
+        <div class="blind-reward">보상: $3</div>
+      </div>
+      <div class="blind-option" onclick="selectBlind('big')">
+        <div class="blind-icon">🟡</div>
+        <div class="blind-title">Big Blind</div>
+        <div class="blind-req">목표: ${scores.big}</div>
+        <div class="blind-reward">보상: $4</div>
+      </div>
+      <div class="blind-option boss" onclick="selectBlind('boss')">
+        <div class="blind-icon">${currentBoss.icon}</div>
+        <div class="blind-title">${currentBoss.name}</div>
+        <div class="blind-req">목표: ${scores.boss}</div>
+        <div class="blind-reward">${currentBoss.desc}</div>
+      </div>
+    </div>
+  `;
+  el.style.display = 'flex';
+  hideGameUI();
+}
+
+function selectBlind(type) {
+  const scores = getAnteScores(G.ante);
+  if(type==='small') { G.targetScore=scores.small; G.blindReward=3; G.blindName='Small Blind'; }
+  else if(type==='big') { G.targetScore=scores.big; G.blindReward=4; G.blindName='Big Blind'; }
+  else {
+    G.targetScore=scores.boss; G.blindReward=5; G.blindName=currentBoss.name;
+    // 보스 효과 적용
+    if(currentBoss.effect==='wall') G.targetScore*=2;
+    if(currentBoss.effect==='needle') { G.hands=1; }
+  }
+
+  G.roundScore = 0;
+  if(currentBoss?.effect!=='needle' || type!=='boss') {
+    G.hands = G.maxHands;
+  }
+  G.discards = G.maxDiscards;
+  G.deck = createDeck();
+  G.hand = [];
+  G.selected = [];
+
+  document.getElementById('blind-select').style.display='none';
+  showGameUI();
+  dealHand();
+}
+
+// =================== UI 표시/숨김 ===================
+function showGameUI() {
+  G.phase = 'play';
+  ['top-bar','joker-area','round-info','score-display','hand-info','action-btns'].forEach(id=>
+    document.getElementById(id).style.display = id==='joker-area'?'flex': id==='action-btns'?'flex':'');
+  updateUI();
+  renderJokers();
+}
+
+function hideGameUI() {
+  ['top-bar','joker-area','round-info','score-display','hand-info','action-btns','hand-area'].forEach(id=>{
+    const e = document.getElementById(id);
+    if(id==='hand-area') e.innerHTML='';
+    else if(e) e.style.display='none';
+  });
+}
+
+function updateUI() {
+  document.getElementById('round-num').textContent = G.round;
+  document.getElementById('ante-num').textContent = G.ante;
+  document.getElementById('total-score').textContent = G.totalScore.toLocaleString();
+  document.getElementById('money').textContent = `$${G.money}`;
+  document.getElementById('hands-left').textContent = G.hands;
+  document.getElementById('discards-left').textContent = G.discards;
+  document.getElementById('blind-name').textContent = G.blindName || 'Small Blind';
+  document.getElementById('target-score').textContent = G.targetScore.toLocaleString();
+
+  const pct = Math.min(100, (G.roundScore/G.targetScore)*100);
+  document.getElementById('score-bar-fill').style.width = pct+'%';
+
+  document.getElementById('play-btn').disabled = G.selected.length===0 || G.selected.length>5 || G.hands<=0;
+  document.getElementById('discard-btn').disabled = G.selected.length===0 || G.selected.length>5 || G.discards<=0;
+}
+
+// =================== 카드 딜 ===================
+function dealHand() {
+  while(G.hand.length < G.handSize && G.deck.length > 0) {
+    G.hand.push(G.deck.pop());
+  }
+  G.selected = [];
+  renderHand();
+  updateUI();
+}
+
+// =================== 핸드 렌더링 ===================
+function renderHand() {
+  const area = document.getElementById('hand-area');
+  area.innerHTML = '';
+  G.hand.forEach((card, i) => {
+    const div = document.createElement('div');
+    div.className = `card ${card.suit}${G.selected.includes(i)?' selected':''} dealing`;
+    div.style.animationDelay = `${i*0.05}s`;
+    div.innerHTML = `
+      <div class="suit-top"><span>${card.rank}</span><span>${SUIT_SYMBOLS[card.suit]}</span></div>
+      <div class="suit-center">${SUIT_SYMBOLS[card.suit]}</div>
+      <div class="suit-bottom"><span>${card.rank}</span><span>${SUIT_SYMBOLS[card.suit]}</span></div>
+    `;
+    div.onclick = () => toggleSelect(i);
+    area.appendChild(div);
+  });
+}
+
+function toggleSelect(idx) {
+  if(G.phase !== 'play') return;
+  const i = G.selected.indexOf(idx);
+  if(i>=0) G.selected.splice(i,1);
+  else if(G.selected.length<5) G.selected.push(idx);
+  renderHand();
+  updateUI();
+
+  // 미리보기
+  if(G.selected.length>0) {
+    const cards = G.selected.map(i=>G.hand[i]);
+    const result = evaluateHand(cards);
+    document.getElementById('hand-type').textContent = result.type;
+    document.getElementById('hand-type').classList.add('show');
+    document.getElementById('score-calc').textContent = `${result.chips} × ${result.mult}`;
+    document.getElementById('score-calc').classList.add('show');
+  } else {
+    document.getElementById('hand-type').classList.remove('show');
+    document.getElementById('score-calc').classList.remove('show');
+  }
+}
+
+// =================== 포커 핸드 평가 ===================
+function evaluateHand(cards) {
+  if(cards.length===0) return {type:'없음', chips:0, mult:0, scoringCards:[]};
+
+  const sorted = [...cards].sort((a,b) => RANKS.indexOf(a.rank)-RANKS.indexOf(b.rank));
+  const ranks = sorted.map(c=>RANKS.indexOf(c.rank));
+  const suits = sorted.map(c=>c.suit);
+
+  // 카운트
+  const rankCount = {};
+  sorted.forEach(c => { rankCount[c.rank] = (rankCount[c.rank]||0)+1; });
+  const counts = Object.values(rankCount).sort((a,b)=>b-a);
+
+  const isFlush = cards.length>=5 && suits.every(s=>s===suits[0]);
+
+  // 스트레이트 체크
+  let isStraight = false;
+  if(cards.length>=5) {
+    const uniqRanks = [...new Set(ranks)].sort((a,b)=>a-b);
+    if(uniqRanks.length>=5) {
+      // A-2-3-4-5 (wheel)
+      if(uniqRanks.includes(12) && uniqRanks.includes(0) && uniqRanks.includes(1) && uniqRanks.includes(2) && uniqRanks.includes(3)) {
+        isStraight = true;
+      }
+      // 일반 스트레이트
+      for(let i=0;i<=uniqRanks.length-5;i++) {
+        if(uniqRanks[i+4]-uniqRanks[i]===4) { isStraight=true; break; }
+      }
+    }
+  }
+
+  // 로얄 플러시
+  const isRoyal = isFlush && isStraight && ranks.includes(12) && ranks.includes(11) && ranks.includes(10) && ranks.includes(9) && ranks.includes(8);
+
+  let type, scoringCards;
+
+  if(isRoyal) {
+    type = 'Royal Flush'; scoringCards = cards;
+  } else if(isFlush && isStraight) {
+    type = 'Straight Flush'; scoringCards = cards;
+  } else if(counts[0]===4) {
+    type = 'Four of a Kind';
+    const fourRank = Object.keys(rankCount).find(r=>rankCount[r]===4);
+    scoringCards = cards.filter(c=>c.rank===fourRank);
+  } else if(counts[0]===3 && counts[1]>=2) {
+    type = 'Full House'; scoringCards = cards;
+  } else if(isFlush) {
+    type = 'Flush'; scoringCards = cards;
+  } else if(isStraight) {
+    type = 'Straight'; scoringCards = cards;
+  } else if(counts[0]===3) {
+    type = 'Three of a Kind';
+    const threeRank = Object.keys(rankCount).find(r=>rankCount[r]===3);
+    scoringCards = cards.filter(c=>c.rank===threeRank);
+  } else if(counts[0]===2 && counts[1]===2) {
+    type = 'Two Pair';
+    const pairRanks = Object.keys(rankCount).filter(r=>rankCount[r]===2);
+    scoringCards = cards.filter(c=>pairRanks.includes(c.rank));
+  } else if(counts[0]===2) {
+    type = 'Pair';
+    const pairRank = Object.keys(rankCount).find(r=>rankCount[r]===2);
+    scoringCards = cards.filter(c=>c.rank===pairRank);
+  } else {
+    type = 'High Card';
+    const maxRank = Math.max(...ranks);
+    scoringCards = [sorted.find(c=>RANKS.indexOf(c.rank)===maxRank)];
+  }
+
+  const ht = HAND_TYPES[type];
+  const lvl = handLevels[type] || 1;
+  let baseChips = ht.chips + (lvl-1)*15;
+  let baseMult = ht.mult + (lvl-1)*1;
+
+  // 스코어링 카드의 칩 추가
+  let cardChips = 0;
+  scoringCards.forEach(c => { cardChips += RANK_VALUES[c.rank]; });
+
+  return {type, chips: baseChips + cardChips, mult: baseMult, scoringCards};
+}
+
+// =================== 핸드 플레이 ===================
+async function playHand() {
+  if(G.selected.length===0 || G.selected.length>5 || G.hands<=0) return;
+  if(G.phase!=='play') return;
+  G.phase = 'scoring';
+
+  const playedCards = G.selected.map(i=>G.hand[i]);
+
+  // 보스: Psychic - 5장 필수
+  if(currentBoss && G.blindName===currentBoss.name && currentBoss.effect==='psychic' && playedCards.length!==5) {
+    G.phase = 'play';
+    showFloatingText('5장을 플레이해야 합니다!', '#e94560');
+    return;
+  }
+
+  // 보스: Eye - 같은 타입 반복 불가
+  const result = evaluateHand(playedCards);
+  if(currentBoss && G.blindName===currentBoss.name && currentBoss.effect==='eye' && bossUsedTypes.includes(result.type)) {
+    G.phase = 'play';
+    showFloatingText(`${result.type}은(는) 이미 사용됨!`, '#e94560');
+    return;
+  }
+
+  // 보스: Mouth - 한 타입만 사용
+  if(currentBoss && G.blindName===currentBoss.name && currentBoss.effect==='mouth') {
+    if(bossLockedType && result.type!==bossLockedType) {
+      G.phase = 'play';
+      showFloatingText(`${bossLockedType}만 사용 가능!`, '#e94560');
+      return;
+    }
+    bossLockedType = result.type;
+  }
+
+  bossUsedTypes.push(result.type);
+
+  // 보스: Hook - 랜덤 2장 버리기
+  if(currentBoss && G.blindName===currentBoss.name && currentBoss.effect==='hook') {
+    const remaining = G.hand.filter((_,i) => !G.selected.includes(i));
+    for(let i=0;i<2 && remaining.length>0;i++) {
+      const ri = Math.floor(Math.random()*remaining.length);
+      remaining.splice(ri,1);
+    }
+  }
+
+  let {type, chips, mult, scoringCards} = result;
+
+  // 조커 효과 적용
+  for(const joker of G.jokers) {
+    const def = JOKER_DEFS.find(j=>j.id===joker.id);
+    if(def) {
+      const eff = def.effect(G, type, playedCards);
+      if(eff.addChips) chips += eff.addChips;
+      if(eff.addMult) mult += eff.addMult;
+      if(eff.mulMult) mult = Math.floor(mult * eff.mulMult);
+    }
+  }
+
+  const score = chips * mult;
+
+  // 점수 표시 애니메이션
+  document.getElementById('hand-type').textContent = type;
+  document.getElementById('hand-type').classList.add('show');
+  document.getElementById('score-calc').textContent = `${chips} × ${mult}`;
+  document.getElementById('score-calc').classList.add('show');
+
+  await sleep(400);
+
+  document.getElementById('score-anim').textContent = score.toLocaleString();
+  document.getElementById('score-anim').classList.add('show');
+
+  // 점수 날아가는 이펙트
+  showFloatingText(`+${score.toLocaleString()}`, '#ffd93d');
+
+  await sleep(800);
+
+  G.roundScore += score;
+  G.totalScore += score;
+  G.hands--;
+
+  // 플레이한 카드 제거
+  G.selected.sort((a,b)=>b-a);
+  G.selected.forEach(i => G.hand.splice(i,1));
+  G.selected = [];
+
+  document.getElementById('score-anim').classList.remove('show');
+
+  updateUI();
+
+  // 라운드 승리 체크
+  if(G.roundScore >= G.targetScore) {
+    await sleep(500);
+    winRound();
+    return;
+  }
+
+  // 핸드 소진 체크
+  if(G.hands <= 0) {
+    await sleep(500);
+    gameOver();
+    return;
+  }
+
+  // 새 카드 드로우
+  dealHand();
+  G.phase = 'play';
+
+  await sleep(300);
+  document.getElementById('hand-type').classList.remove('show');
+  document.getElementById('score-calc').classList.remove('show');
+}
+
+// =================== 카드 버리기 ===================
+function discardCards() {
+  if(G.selected.length===0 || G.selected.length>5 || G.discards<=0) return;
+  if(G.phase!=='play') return;
+
+  G.discards--;
+  G.selected.sort((a,b)=>b-a);
+  G.selected.forEach(i => G.hand.splice(i,1));
+  G.selected = [];
+
+  dealHand();
+}
+
+// =================== 정렬 ===================
+function sortHand() {
+  if(G.sortMode==='rank') {
+    G.hand.sort((a,b) => RANKS.indexOf(b.rank)-RANKS.indexOf(a.rank));
+    G.sortMode = 'suit';
+  } else {
+    G.hand.sort((a,b) => SUITS.indexOf(a.suit)-SUITS.indexOf(b.suit) || RANKS.indexOf(b.rank)-RANKS.indexOf(a.rank));
+    G.sortMode = 'rank';
+  }
+  G.selected = [];
+  renderHand();
+}
+
+// =================== 라운드 승리 ===================
+function winRound() {
+  G.money += G.blindReward;
+  // 이자: $5당 $1 (최대 $5)
+  const interest = Math.min(5, Math.floor(G.money/5));
+  G.money += interest;
+  G.round++;
+
+  showFloatingText(`+$${G.blindReward} 보상, +$${interest} 이자`, '#66bb6a');
+
+  // 보스 클리어 → 다음 앤티
+  if(G.blindName === currentBoss?.name) {
+    G.ante++;
+    if(G.ante > G.maxAnte) {
+      victory();
+      return;
+    }
+  }
+
+  setTimeout(() => showShop(), 800);
+}
+
+// =================== 게임오버 ===================
+function gameOver() {
+  G.phase = 'gameover';
+  hideGameUI();
+  const el = document.getElementById('gameover');
+  document.getElementById('go-score').textContent = `앤티 ${G.ante} - 총 점수: ${G.totalScore.toLocaleString()}`;
+  el.style.display = 'flex';
+}
+
+// =================== 승리 ===================
+function victory() {
+  G.phase = 'victory';
+  hideGameUI();
+  const el = document.getElementById('victory');
+  document.getElementById('vic-score').textContent = `최종 점수: ${G.totalScore.toLocaleString()}`;
+  el.style.display = 'flex';
+}
+
+// =================== 상점 ===================
+function showShop() {
+  G.phase = 'shop';
+  hideGameUI();
+  document.getElementById('top-bar').style.display='flex';
+  updateUI();
+
+  const el = document.getElementById('shop-screen');
+  el.style.display = 'flex';
+  generateShopItems();
+}
+
+function generateShopItems() {
+  const container = document.getElementById('shop-items');
+  container.innerHTML = '';
+
+  const items = [];
+
+  // 조커 2개
+  const availJokers = JOKER_DEFS.filter(j => !G.jokers.find(gj=>gj.id===j.id));
+  const shuffled = shuffle(availJokers);
+  for(let i=0;i<2 && i<shuffled.length;i++) {
+    items.push({type:'joker', data:shuffled[i]});
+  }
+
+  // 행성 카드 (핸드 레벨업) 2개
+  const handTypes = Object.keys(HAND_TYPES);
+  const randHands = shuffle(handTypes).slice(0,2);
+  randHands.forEach(h => {
+    items.push({type:'planet', data:{name:h, cost:3+Math.floor(Math.random()*3)}});
+  });
+
+  // 소모품 1개
+  items.push({type:'consumable', data:{
+    name:'탐색 카드', icon:'🔍', desc:'다음 핸드 +2', cost:3,
+    effect:()=>{ G.maxHands+=1; G.hands+=1; }
+  }});
+
+  items.forEach((item,i) => {
+    const div = document.createElement('div');
+    div.className = 'shop-item';
+
+    if(item.type==='joker') {
+      const j = item.data;
+      div.innerHTML = `
+        <div class="item-icon">${j.icon}</div>
+        <div class="item-name">${j.name}</div>
+        <div class="item-desc">${j.desc}</div>
+        <div class="item-price">$${j.cost}</div>
+      `;
+      div.onclick = () => buyJoker(j, div);
+    } else if(item.type==='planet') {
+      const p = item.data;
+      const lvl = handLevels[p.name]||1;
+      div.innerHTML = `
+        <div class="item-icon">🪐</div>
+        <div class="item-name">${p.name}</div>
+        <div class="item-desc">Lv.${lvl}→${lvl+1} 업그레이드</div>
+        <div class="item-price">$${p.cost}</div>
+      `;
+      div.onclick = () => buyPlanet(p, div);
+    } else {
+      const c = item.data;
+      div.innerHTML = `
+        <div class="item-icon">${c.icon}</div>
+        <div class="item-name">${c.name}</div>
+        <div class="item-desc">${c.desc}</div>
+        <div class="item-price">$${c.cost}</div>
+      `;
+      div.onclick = () => buyConsumable(c, div);
+    }
+
+    container.appendChild(div);
+  });
+}
+
+function buyJoker(jokerDef, el) {
+  if(G.money < jokerDef.cost) { showFloatingText('돈이 부족합니다!','#e94560'); return; }
+  if(G.jokers.length >= G.maxJokers) { showFloatingText('조커 슬롯이 가득 찼습니다!','#e94560'); return; }
+  G.money -= jokerDef.cost;
+  G.jokers.push({id:jokerDef.id});
+  el.style.opacity='0.3';
+  el.style.pointerEvents='none';
+  updateUI();
+  showFloatingText(`${jokerDef.name} 획득!`, '#66bb6a');
+}
+
+function buyPlanet(planet, el) {
+  if(G.money < planet.cost) { showFloatingText('돈이 부족합니다!','#e94560'); return; }
+  G.money -= planet.cost;
+  handLevels[planet.name] = (handLevels[planet.name]||1) + 1;
+  el.style.opacity='0.3';
+  el.style.pointerEvents='none';
+  updateUI();
+  showFloatingText(`${planet.name} Lv.${handLevels[planet.name]}!`, '#4fc3f7');
+}
+
+function buyConsumable(cons, el) {
+  if(G.money < cons.cost) { showFloatingText('돈이 부족합니다!','#e94560'); return; }
+  G.money -= cons.cost;
+  cons.effect();
+  el.style.opacity='0.3';
+  el.style.pointerEvents='none';
+  updateUI();
+  showFloatingText(`${cons.name} 사용!`, '#66bb6a');
+}
+
+function rerollShop() {
+  if(G.money < 5) { showFloatingText('돈이 부족합니다!','#e94560'); return; }
+  G.money -= 5;
+  updateUI();
+  generateShopItems();
+}
+
+function skipShop() {
+  document.getElementById('shop-screen').style.display='none';
+  showBlindSelect();
+}
+
+// =================== 조커 렌더링 ===================
+function renderJokers() {
+  const area = document.getElementById('joker-area');
+  area.innerHTML = '';
+
+  for(let i=0;i<G.maxJokers;i++) {
+    if(i < G.jokers.length) {
+      const j = G.jokers[i];
+      const def = JOKER_DEFS.find(d=>d.id===j.id);
+      const div = document.createElement('div');
+      div.className = 'joker-card';
+      div.innerHTML = `
+        <div class="joker-icon">${def.icon}</div>
+        <div class="joker-name">${def.name}</div>
+        <div class="joker-desc">${def.desc}</div>
+      `;
+      div.onmouseenter = (e) => showTooltip(e, def.name, def.desc);
+      div.onmouseleave = hideTooltip;
+      area.appendChild(div);
+    } else {
+      const slot = document.createElement('div');
+      slot.className = 'joker-slot';
+      slot.innerHTML = '<span>조커</span><span>슬롯</span>';
+      area.appendChild(slot);
+    }
+  }
+}
+
+// =================== 툴팁 ===================
+function showTooltip(e, title, desc) {
+  const tt = document.getElementById('tooltip');
+  tt.querySelector('.tt-title').textContent = title;
+  tt.querySelector('.tt-desc').textContent = desc;
+  tt.style.display = 'block';
+  tt.style.left = (e.clientX + 15) + 'px';
+  tt.style.top = (e.clientY + 15) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// =================== 유틸 ===================
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+function showFloatingText(text, color) {
+  const div = document.createElement('div');
+  div.className = 'score-fly';
+  div.textContent = text;
+  div.style.color = color;
+  div.style.left = '50%';
+  div.style.top = '40%';
+  div.style.transform = 'translateX(-50%)';
+  document.getElementById('game').appendChild(div);
+  setTimeout(()=>div.remove(), 1000);
+}
+
+// =================== 키보드 단축키 ===================
+document.addEventListener('keydown', e => {
+  if(G.phase==='play') {
+    if(e.key==='Enter' || e.key===' ') { e.preventDefault(); playHand(); }
+    if(e.key==='d' || e.key==='D') discardCards();
+    if(e.key==='s' || e.key==='S') sortHand();
+    // 숫자키로 카드 선택
+    const num = parseInt(e.key);
+    if(num>=1 && num<=G.hand.length) toggleSelect(num-1);
+  }
+});
+
+// 마우스 이동 시 툴팁 위치
+document.addEventListener('mousemove', e => {
+  const tt = document.getElementById('tooltip');
+  if(tt.style.display==='block') {
+    tt.style.left = (e.clientX+15)+'px';
+    tt.style.top = (e.clientY+15)+'px';
+  }
+});
+
+</script>
+</body>
+</html>

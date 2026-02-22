@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>라이벌 FPS</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background:#0a0a1a;
+    display:flex; justify-content:center; align-items:center;
+    height:100vh; overflow:hidden;
+    font-family:'Segoe UI',sans-serif;
+}
+canvas {
+    border-radius:8px;
+    box-shadow:0 0 60px rgba(255,50,50,.3);
+    max-width:100vw;
+    max-height:100vh;
+}
+#crosshair {
+    position:fixed; pointer-events:none; z-index:999;
+    width:30px; height:30px;
+    display:none;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 960, H = 640;
+canvas.width = W; canvas.height = H;
+
+// ====== GAME STATE ======
+let gameState = 'title'; // title, classSelect, playing, dead, scoreboard
+let mouseX = W/2, mouseY = H/2;
+let mouseLocked = false;
+let yaw = 0, pitch = 0;
+const SENSITIVITY = 0.0008;
+
+// ====== PLAYER ======
+const player = {
+    x: 0, z: 0, y: 0,
+    vx: 0, vz: 0, vy: 0,
+    hp: 100, maxHp: 100,
+    armor: 0,
+    kills: 0, deaths: 0,
+    weapon: 0,
+    ammo: [30, 8, 5, 1],
+    maxAmmo: [30, 8, 5, 1],
+    reloadTime: 0,
+    shootCooldown: 0,
+    respawnTimer: 0,
+    spawnProtection: 0,
+    speed: 2.2,
+    jumpForce: 6,
+    onGround: false,
+    damageFlash: 0,
+    killStreak: 0,
+    lastKillTime: 0,
+    dashCooldown: 0,
+    dashing: false,
+    dashTime: 0,
+    dashDir: {x:0, z:0},
+    selectedClass: 0,
+    scope: false,
+    muzzleFlash: 0
+};
+
+// ====== WEAPONS ======
+const weapons = [
+    { name:'돌격소총', damage:18, fireRate:6, reloadSpeed:90, spread:0.015, auto:true, range:300, color:'#ff6b35', ammoName:'5.56mm', icon:'▄█▀', sound:'rifle' },
+    { name:'샷건', damage:12, fireRate:30, reloadSpeed:60, spread:0.08, auto:false, range:100, color:'#ffaa00', pellets:8, ammoName:'12게이지', icon:'▄██', sound:'shotgun' },
+    { name:'스나이퍼', damage:95, fireRate:50, reloadSpeed:120, spread:0.001, auto:false, range:500, color:'#00ccff', ammoName:'.50 BMG', icon:'━━▄', sound:'sniper', scope:true },
+    { name:'로켓런처', damage:80, fireRate:60, reloadSpeed:150, spread:0.005, auto:false, range:400, color:'#ff3333', ammoName:'로켓', icon:'◄━━', sound:'rocket', explosive:true }
+];
+
+// ====== CLASSES ======
+const classes = [
+    { name:'돌격병', desc:'빠른 이동 + 돌격소총', weapon:0, hp:100, armor:0, speed:2.5, color:'#ff6b35', ability:'대시', abilityCooldown:180 },
+    { name:'탱커', desc:'높은 체력 + 샷건', weapon:1, hp:150, armor:50, speed:1.8, color:'#44aa44', ability:'보호막', abilityCooldown:300 },
+    { name:'저격수', desc:'스나이퍼 + 스코프', weapon:2, hp:80, armor:0, speed:2.2, color:'#00ccff', ability:'투명화', abilityCooldown:360 },
+    { name:'폭파병', desc:'로켓런처 + 폭발', weapon:3, hp:100, armor:25, speed:2.0, color:'#ff3333', ability:'지뢰', abilityCooldown:240 }
+];
+
+// ====== MAP ======
+const MAP_SIZE = 400;
+const walls = [];
+const buildings = [];
+const spawnPoints = [
+    {x:-150, z:-150}, {x:150, z:-150}, {x:-150, z:150}, {x:150, z:150},
+    {x:0, z:-180}, {x:0, z:180}, {x:-180, z:0}, {x:180, z:0}
+];
+
+function generateMap() {
+    walls.length = 0;
+    buildings.length = 0;
+
+    // Border walls
+    walls.push({x:-MAP_SIZE, z:-MAP_SIZE, w:MAP_SIZE*2, d:5, h:30, color:'#333'});
+    walls.push({x:-MAP_SIZE, z:MAP_SIZE-5, w:MAP_SIZE*2, d:5, h:30, color:'#333'});
+    walls.push({x:-MAP_SIZE, z:-MAP_SIZE, w:5, d:MAP_SIZE*2, h:30, color:'#333'});
+    walls.push({x:MAP_SIZE-5, z:-MAP_SIZE, w:5, d:MAP_SIZE*2, h:30, color:'#333'});
+
+    // Central building
+    buildings.push({x:-30, z:-30, w:60, d:60, h:25, color:'#4a4a6a', name:'중앙 건물'});
+    walls.push({x:-30, z:-30, w:60, d:5, h:25, color:'#4a4a6a'});
+    walls.push({x:-30, z:25, w:60, d:5, h:25, color:'#4a4a6a'});
+    walls.push({x:-30, z:-30, w:5, d:60, h:25, color:'#4a4a6a'});
+    walls.push({x:25, z:-30, w:5, d:60, h:25, color:'#4a4a6a'});
+
+    // Corner buildings
+    const corners = [{x:-120,z:-120},{x:80,z:-120},{x:-120,z:80},{x:80,z:80}];
+    corners.forEach(c => {
+        buildings.push({x:c.x, z:c.z, w:40, d:40, h:20, color:'#5a4a3a'});
+        walls.push({x:c.x, z:c.z, w:40, d:3, h:20, color:'#5a4a3a'});
+        walls.push({x:c.x, z:c.z+37, w:40, d:3, h:20, color:'#5a4a3a'});
+        walls.push({x:c.x, z:c.z, w:3, d:40, h:20, color:'#5a4a3a'});
+        walls.push({x:c.x+37, z:c.z, w:3, d:40, h:20, color:'#5a4a3a'});
+    });
+
+    // Scattered cover walls
+    const covers = [
+        {x:-60,z:0,w:20,d:3,h:12}, {x:40,z:0,w:20,d:3,h:12},
+        {x:0,z:-60,w:3,d:20,h:12}, {x:0,z:40,w:3,d:20,h:12},
+        {x:-80,z:-60,w:15,d:3,h:10}, {x:65,z:60,w:15,d:3,h:10},
+        {x:-60,z:80,w:3,d:15,h:10}, {x:60,z:-80,w:3,d:15,h:10},
+        {x:-150,z:50,w:25,d:3,h:15}, {x:125,z:-50,w:25,d:3,h:15},
+        {x:50,z:150,w:3,d:25,h:15}, {x:-50,z:-150,w:3,d:25,h:15}
+    ];
+    covers.forEach(c => {
+        walls.push({...c, color:'#666'});
+    });
+
+    // Crate clusters
+    for(let i = 0; i < 15; i++) {
+        const x = (Math.random()-0.5) * MAP_SIZE * 1.5;
+        const z = (Math.random()-0.5) * MAP_SIZE * 1.5;
+        const s = 4 + Math.random()*4;
+        walls.push({x:x, z:z, w:s, d:s, h:s, color:'#8B7355'});
+    }
+}
+
+// ====== ENEMIES (BOTS) ======
+const enemies = [];
+const MAX_ENEMIES = 8;
+const botNames = ['Shadow','Ghost','Viper','Phoenix','Storm','Blade','Raven','Wolf','Hawk','Fox','Bear','Cobra'];
+
+function spawnEnemy() {
+    if(enemies.length >= MAX_ENEMIES) return;
+    const sp = spawnPoints[Math.floor(Math.random()*spawnPoints.length)];
+    const cls = Math.floor(Math.random()*classes.length);
+    enemies.push({
+        x: sp.x + (Math.random()-0.5)*30,
+        z: sp.z + (Math.random()-0.5)*30,
+        y: 0,
+        vx: 0, vz: 0, vy: 0,
+        hp: classes[cls].hp,
+        maxHp: classes[cls].hp,
+        armor: classes[cls].armor,
+        class: cls,
+        weapon: classes[cls].weapon,
+        yaw: Math.random()*Math.PI*2,
+        shootCooldown: 0,
+        name: botNames[Math.floor(Math.random()*botNames.length)],
+        state: 'patrol', // patrol, chase, attack, flee
+        targetX: 0, targetZ: 0,
+        stateTimer: 0,
+        kills: 0, deaths: 0,
+        speed: classes[cls].speed * 0.6,
+        onGround: true,
+        color: classes[cls].color,
+        muzzleFlash: 0,
+        strafeDir: Math.random() > 0.5 ? 1 : -1,
+        strafeTimer: 0,
+        accuracy: 0.2 + Math.random()*0.25,
+        reactionTime: 40 + Math.random()*80,
+        target: null, // 타겟 (플레이어 또는 다른 봇)
+        spawnProtection: 120 // 봇도 2초 무적
+    });
+}
+
+// ====== PROJECTILES & EFFECTS ======
+const bullets = [];
+const explosions = [];
+const particles = [];
+const damageNumbers = [];
+let killFeed = [];
+
+function addParticle(x, y, z, vx, vy, vz, color, life, size) {
+    particles.push({x,y,z,vx,vy,vz,color,life,maxLife:life,size:size||2});
+}
+
+function addExplosion(x, y, z, radius) {
+    explosions.push({x,y,z,radius,time:0,maxTime:30});
+    for(let i=0;i<30;i++){
+        const a=Math.random()*Math.PI*2, p=Math.random()*Math.PI;
+        const s=3+Math.random()*5;
+        addParticle(x,y,z, Math.cos(a)*Math.sin(p)*s, Math.cos(p)*s+2, Math.sin(a)*Math.sin(p)*s,
+            ['#ff4400','#ff8800','#ffcc00','#ff2200'][Math.floor(Math.random()*4)], 20+Math.random()*20, 3+Math.random()*3);
+    }
+}
+
+function addKillFeed(killer, victim, weapon) {
+    killFeed.unshift({killer, victim, weapon, time:180});
+    if(killFeed.length > 5) killFeed.pop();
+}
+
+function addDamageNumber(x, y, z, dmg, crit) {
+    damageNumbers.push({x,y,z,dmg,time:0,crit,vy:2});
+}
+
+// ====== INPUT ======
+const keys = {};
+document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if(gameState === 'title' && e.code === 'Space') gameState = 'classSelect';
+    if(gameState === 'classSelect') {
+        if(e.code === 'Digit1') selectClass(0);
+        if(e.code === 'Digit2') selectClass(1);
+        if(e.code === 'Digit3') selectClass(2);
+        if(e.code === 'Digit4') selectClass(3);
+    }
+    if(gameState === 'dead' && e.code === 'Space' && player.respawnTimer <= 0) respawn();
+    if(gameState === 'playing') {
+        if(e.code === 'KeyR' && player.ammo[player.weapon] < player.maxAmmo[player.weapon] && player.reloadTime <= 0) reload();
+        if(e.code === 'Tab') { e.preventDefault(); gameState = 'scoreboard'; }
+        if(e.code === 'Digit1') player.weapon = classes[player.selectedClass].weapon;
+        if(e.code === 'ShiftLeft' && player.dashCooldown <= 0 && player.selectedClass === 0) startDash();
+        if(e.code === 'KeyQ') useAbility();
+        if(e.code === 'KeyR') reload();
+    }
+});
+document.addEventListener('keyup', e => {
+    keys[e.code] = false;
+    if(e.code === 'Tab' && gameState === 'scoreboard') gameState = 'playing';
+});
+
+let shooting = false;
+let canvasMouseX = 0, canvasMouseY = 0;
+
+canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    canvasMouseX = (e.clientX - rect.left) * (W / rect.width);
+    canvasMouseY = (e.clientY - rect.top) * (H / rect.height);
+});
+
+function getCanvasCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (e.clientX - rect.left) * (W / rect.width),
+        y: (e.clientY - rect.top) * (H / rect.height)
+    };
+}
+
+function handleMouseDown(e) {
+    const coords = getCanvasCoords(e);
+    canvasMouseX = coords.x;
+    canvasMouseY = coords.y;
+
+    if(gameState === 'playing') {
+        shooting = true;
+        if(!mouseLocked) {
+            try { canvas.requestPointerLock(); } catch(e) {}
+        }
+    } else if(gameState === 'title') {
+        gameState = 'classSelect';
+    } else if(gameState === 'classSelect') {
+        for(let i = 0; i < 4; i++) {
+            const cx = 60 + i * 220, cy = 140, cw = 200, ch = 380;
+            if(coords.x >= cx && coords.x <= cx+cw && coords.y >= cy && coords.y <= cy+ch) {
+                selectClass(i);
+                break;
+            }
+        }
+    } else if(gameState === 'dead' && player.respawnTimer <= 0) {
+        respawn();
+    }
+}
+canvas.addEventListener('mousedown', handleMouseDown);
+document.addEventListener('mousedown', e => {
+    if(mouseLocked && gameState === 'playing') {
+        shooting = true;
+    }
+});
+document.addEventListener('mouseup', () => { shooting = false; });
+
+// Touch support for mobile / iframe
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const coords = {
+        x: (touch.clientX - rect.left) * (W / rect.width),
+        y: (touch.clientY - rect.top) * (H / rect.height)
+    };
+    canvasMouseX = coords.x;
+    canvasMouseY = coords.y;
+
+    if(gameState === 'title') {
+        gameState = 'classSelect';
+    } else if(gameState === 'classSelect') {
+        for(let i = 0; i < 4; i++) {
+            const cx = 60 + i * 220, cy = 140, cw = 200, ch = 380;
+            if(coords.x >= cx && coords.x <= cx+cw && coords.y >= cy && coords.y <= cy+ch) {
+                selectClass(i);
+                break;
+            }
+        }
+    } else if(gameState === 'playing') {
+        shooting = true;
+    } else if(gameState === 'dead' && player.respawnTimer <= 0) {
+        respawn();
+    }
+}, {passive:false});
+canvas.addEventListener('touchend', () => { shooting = false; });
+
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if(weapons[player.weapon].scope) player.scope = !player.scope;
+});
+
+// Fallback: document-level click for environments where canvas events don't fire
+document.addEventListener('click', e => {
+    if(gameState === 'title') {
+        gameState = 'classSelect';
+    }
+});
+
+document.addEventListener('pointerlockchange', () => {
+    mouseLocked = document.pointerLockElement === canvas;
+    document.body.style.cursor = mouseLocked ? 'none' : 'default';
+});
+
+document.addEventListener('mousemove', e => {
+    if(gameState === 'playing') {
+        if(mouseLocked) {
+            yaw += e.movementX * SENSITIVITY;
+            pitch -= e.movementY * SENSITIVITY;
+        } else {
+            // Fallback: 포인터 락 없이도 마우스로 조준 가능
+            yaw += e.movementX * SENSITIVITY;
+            pitch -= e.movementY * SENSITIVITY;
+        }
+        pitch = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
+    }
+});
+
+// ====== GAME FUNCTIONS ======
+function selectClass(idx) {
+    player.selectedClass = idx;
+    const cls = classes[idx];
+    player.weapon = cls.weapon;
+    player.maxHp = cls.hp;
+    player.hp = cls.hp;
+    player.armor = cls.armor;
+    player.speed = cls.speed;
+    player.ammo = [...player.maxAmmo];
+    respawn();
+    gameState = 'playing';
+    try { canvas.requestPointerLock(); } catch(e) {}
+}
+
+function findSafeSpawn() {
+    // 적에게서 가장 먼 스폰 포인트를 찾기
+    let bestSpawn = spawnPoints[0];
+    let bestMinDist = 0;
+    for(const sp of spawnPoints) {
+        let minDist = Infinity;
+        for(const e of enemies) {
+            if(e.hp <= 0) continue;
+            const dx = sp.x - e.x, dz = sp.z - e.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            if(dist < minDist) minDist = dist;
+        }
+        if(minDist > bestMinDist) {
+            bestMinDist = minDist;
+            bestSpawn = sp;
+        }
+    }
+    return bestSpawn;
+}
+
+function respawn() {
+    const sp = findSafeSpawn();
+    player.x = sp.x + (Math.random()-0.5)*20;
+    player.z = sp.z + (Math.random()-0.5)*20;
+    player.y = 0;
+    player.hp = player.maxHp;
+    player.armor = classes[player.selectedClass].armor;
+    player.ammo[player.weapon] = player.maxAmmo[player.weapon];
+    player.reloadTime = 0;
+    player.shootCooldown = 0;
+    player.killStreak = 0;
+    player.scope = false;
+    player.spawnProtection = 180; // 3초 무적
+    gameState = 'playing';
+}
+
+function reload() {
+    if(player.reloadTime <= 0 && player.ammo[player.weapon] < player.maxAmmo[player.weapon]) {
+        player.reloadTime = weapons[player.weapon].reloadSpeed;
+    }
+}
+
+function startDash() {
+    player.dashing = true;
+    player.dashTime = 10;
+    player.dashCooldown = classes[0].abilityCooldown;
+    const dx = -Math.sin(yaw), dz = Math.cos(yaw);
+    player.dashDir = {x:dx, z:dz};
+}
+
+function useAbility() {
+    // Class-specific abilities placeholder
+    if(player.dashCooldown > 0) return;
+    player.dashCooldown = classes[player.selectedClass].abilityCooldown;
+}
+
+// ====== COLLISION ======
+function checkWallCollision(x, z, radius) {
+    for(const w of walls) {
+        const cx = Math.max(w.x, Math.min(w.x + w.w, x));
+        const cz = Math.max(w.z, Math.min(w.z + w.d, z));
+        const dx = x - cx, dz = z - cz;
+        if(dx*dx + dz*dz < radius*radius) return w;
+    }
+    return null;
+}
+
+function moveWithCollision(entity, dx, dz, radius) {
+    const newX = entity.x + dx;
+    const newZ = entity.z + dz;
+
+    if(!checkWallCollision(newX, entity.z, radius)) entity.x = newX;
+    if(!checkWallCollision(entity.x, newZ, radius)) entity.z = newZ;
+
+    entity.x = Math.max(-MAP_SIZE+5, Math.min(MAP_SIZE-5, entity.x));
+    entity.z = Math.max(-MAP_SIZE+5, Math.min(MAP_SIZE-5, entity.z));
+}
+
+function raycast(ox, oz, dx, dz, maxDist) {
+    let t = 0;
+    const step = 2;
+    while(t < maxDist) {
+        const x = ox + dx*t;
+        const z = oz + dz*t;
+        if(checkWallCollision(x, z, 1)) return {hit:true, dist:t, x, z};
+        t += step;
+    }
+    return {hit:false, dist:maxDist};
+}
+
+// ====== SHOOTING ======
+function playerShoot() {
+    if(player.shootCooldown > 0 || player.reloadTime > 0) return;
+    if(player.ammo[player.weapon] <= 0) { reload(); return; }
+    // 사격하면 스폰 보호 해제
+    player.spawnProtection = 0;
+
+    const w = weapons[player.weapon];
+    player.shootCooldown = w.fireRate;
+    player.ammo[player.weapon]--;
+    player.muzzleFlash = 4;
+
+    const pellets = w.pellets || 1;
+    for(let p = 0; p < pellets; p++) {
+        const spreadX = (Math.random()-0.5) * w.spread * (player.scope ? 0.3 : 1);
+        const spreadY = (Math.random()-0.5) * w.spread * (player.scope ? 0.3 : 1);
+        const dirX = -Math.sin(yaw + spreadX) * Math.cos(pitch + spreadY);
+        const dirZ = Math.cos(yaw + spreadX) * Math.cos(pitch + spreadY);
+        const dirY = Math.sin(pitch + spreadY);
+
+        if(w.explosive) {
+            bullets.push({
+                x:player.x, y:player.y+8, z:player.z,
+                vx:dirX*6, vy:dirY*6, vz:dirZ*6,
+                damage:w.damage, owner:'player', life:120,
+                explosive:true, color:w.color
+            });
+        } else {
+            // Hitscan - 화면 투영 기반 히트 판정
+            let hitDist = w.range;
+            let hitEnemy = null;
+
+            for(const e of enemies) {
+                if(e.hp <= 0 || e.spawnProtection > 0) continue;
+                const dx3 = e.x - player.x, dz3 = e.z - player.z;
+                const dist2d = Math.sqrt(dx3*dx3 + dz3*dz3);
+                if(dist2d > w.range || dist2d < 1) continue;
+
+                // 적이 화면 중앙(조준점) 근처에 있는지 투영으로 판정
+                const p1 = project(e.x, e.y, e.z);         // 적 발 위치
+                const p2 = project(e.x, e.y + 16, e.z);    // 적 머리 위치
+                if(!p1 && !p2) continue;
+
+                // 화면 중앙과의 거리 계산
+                const screenCX = W/2, screenCY = H/2;
+                let hitSize = 60; // 화면상 히트박스 크기(픽셀)
+                if(p1 && p1.scale) hitSize = Math.max(40, 80 * p1.scale);
+
+                let screenDist = Infinity;
+                if(p1 && p2) {
+                    // 적의 세로 범위 안에 있는지도 확인
+                    const topY = Math.min(p1.y, p2.y) - hitSize/2;
+                    const botY = Math.max(p1.y, p2.y) + hitSize/2;
+                    const midX = (p1.x + p2.x) / 2;
+                    const midY = (p1.y + p2.y) / 2;
+                    const dsx = screenCX - midX;
+                    const dsy = screenCY - midY;
+                    screenDist = Math.sqrt(dsx*dsx + dsy*dsy);
+                } else {
+                    const pp = p1 || p2;
+                    const dsx = screenCX - pp.x;
+                    const dsy = screenCY - pp.y;
+                    screenDist = Math.sqrt(dsx*dsx + dsy*dsy);
+                }
+
+                if(screenDist < hitSize && dist2d < hitDist) {
+                    // 벽 체크
+                    const wc = raycast(player.x, player.z, dx3/dist2d, dz3/dist2d, dist2d);
+                    if(!wc.hit) {
+                        hitDist = dist2d;
+                        hitEnemy = e;
+                    }
+                }
+            }
+
+            // 벽 임팩트 (적 안 맞았을 때)
+            if(!hitEnemy) {
+                const wallHit = raycast(player.x, player.z, dirX, dirZ, w.range);
+                if(wallHit.hit) {
+                    for(let i=0;i<3;i++) addParticle(wallHit.x, 8, wallHit.z, (Math.random()-0.5)*2, Math.random()*2, (Math.random()-0.5)*2, '#aaa', 15);
+                    hitDist = wallHit.dist;
+                }
+            }
+
+            if(hitEnemy) {
+                const headshot = Math.random() < 0.15;
+                let dmg = w.damage * (headshot ? 2.5 : 1);
+                if(w.pellets) dmg = w.damage;
+
+                if(hitEnemy.armor > 0) {
+                    const armorDmg = Math.min(hitEnemy.armor, dmg*0.6);
+                    hitEnemy.armor -= armorDmg;
+                    dmg *= 0.4;
+                }
+                hitEnemy.hp -= dmg;
+                addDamageNumber(hitEnemy.x, hitEnemy.y+16, hitEnemy.z, Math.round(dmg), headshot);
+
+                // Hit particles
+                for(let i=0;i<5;i++) addParticle(hitEnemy.x, hitEnemy.y+8, hitEnemy.z, (Math.random()-0.5)*3, Math.random()*3, (Math.random()-0.5)*3, hitEnemy.color, 15);
+
+                if(hitEnemy.hp <= 0) {
+                    onEnemyKilled(hitEnemy, headshot);
+                }
+
+                // Aggro
+                hitEnemy.state = 'chase';
+                hitEnemy.stateTimer = 120;
+            }
+
+            // Tracer
+            const tracerTx = hitEnemy ? hitEnemy.x : player.x+dirX*hitDist;
+            const tracerTy = hitEnemy ? hitEnemy.y+8 : player.y+8+dirY*hitDist;
+            const tracerTz = hitEnemy ? hitEnemy.z : player.z+dirZ*hitDist;
+            bullets.push({
+                x:player.x, y:player.y+8, z:player.z,
+                tx:tracerTx, ty:tracerTy, tz:tracerTz,
+                life:3, tracer:true, color:w.color
+            });
+        }
+    }
+}
+
+function onEnemyKilled(enemy, headshot) {
+    player.kills++;
+    enemy.deaths++;
+    const now = Date.now();
+    if(now - player.lastKillTime < 3000) player.killStreak++;
+    else player.killStreak = 1;
+    player.lastKillTime = now;
+
+    addKillFeed('나', enemy.name, weapons[player.weapon].name + (headshot?' 🎯':''));
+
+    // Death particles
+    for(let i=0;i<20;i++) addParticle(enemy.x, enemy.y+8, enemy.z, (Math.random()-0.5)*5, Math.random()*5, (Math.random()-0.5)*5, enemy.color, 30, 3);
+
+    // Respawn enemy after delay
+    setTimeout(() => {
+        const sp = spawnPoints[Math.floor(Math.random()*spawnPoints.length)];
+        enemy.x = sp.x + (Math.random()-0.5)*30;
+        enemy.z = sp.z + (Math.random()-0.5)*30;
+        enemy.hp = enemy.maxHp;
+        enemy.armor = classes[enemy.class].armor;
+        enemy.state = 'patrol';
+        enemy.spawnProtection = 120;
+    }, 3000);
+}
+
+// ====== BOT AI ======
+function findBotTarget(bot) {
+    // 가장 가까운 보이는 타겟 찾기 (플레이어 또는 다른 봇)
+    let bestTarget = null;
+    let bestDist = Infinity;
+
+    // 플레이어 체크
+    if(gameState === 'playing' && player.hp > 0 && player.spawnProtection <= 0) {
+        const dx = player.x - bot.x, dz = player.z - bot.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if(dist < 250) {
+            const wallCheck = raycast(bot.x, bot.z, dx/dist, dz/dist, dist);
+            if(!wallCheck.hit) {
+                bestTarget = { type:'player', x:player.x, z:player.z, dist };
+                bestDist = dist;
+            }
+        }
+    }
+
+    // 다른 봇 체크
+    for(const other of enemies) {
+        if(other === bot || other.hp <= 0 || other.spawnProtection > 0) continue;
+        const dx = other.x - bot.x, dz = other.z - bot.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if(dist < bestDist && dist < 200) {
+            const wallCheck = raycast(bot.x, bot.z, dx/dist, dz/dist, dist);
+            if(!wallCheck.hit) {
+                bestTarget = { type:'bot', ref:other, x:other.x, z:other.z, dist };
+                bestDist = dist;
+            }
+        }
+    }
+    return bestTarget;
+}
+
+function updateBot(bot) {
+    if(bot.hp <= 0) return;
+
+    bot.shootCooldown = Math.max(0, bot.shootCooldown-1);
+    bot.stateTimer = Math.max(0, bot.stateTimer-1);
+    bot.strafeTimer--;
+    bot.muzzleFlash = Math.max(0, bot.muzzleFlash-1);
+    if(bot.spawnProtection > 0) bot.spawnProtection--;
+
+    // 타겟 찾기
+    const target = findBotTarget(bot);
+    let tx = 0, tz = 0, distToTarget = 999, angleToTarget = 0, canSeeTarget = false;
+
+    if(target) {
+        tx = target.x - bot.x;
+        tz = target.z - bot.z;
+        distToTarget = target.dist;
+        angleToTarget = Math.atan2(tx, tz);
+        canSeeTarget = true;
+    }
+
+    // State machine
+    if(bot.stateTimer <= 0) {
+        if(canSeeTarget && distToTarget < 200) {
+            bot.state = distToTarget < 40 ? 'flee' : 'attack';
+            bot.stateTimer = 60 + Math.random()*60;
+        } else if(canSeeTarget) {
+            bot.state = 'chase';
+            bot.stateTimer = 90;
+        } else {
+            bot.state = 'patrol';
+            bot.targetX = (Math.random()-0.5)*MAP_SIZE*1.5;
+            bot.targetZ = (Math.random()-0.5)*MAP_SIZE*1.5;
+            bot.stateTimer = 120 + Math.random()*120;
+        }
+    }
+
+    let moveX = 0, moveZ = 0;
+
+    switch(bot.state) {
+        case 'patrol': {
+            const tdx = bot.targetX - bot.x, tdz = bot.targetZ - bot.z;
+            const td = Math.sqrt(tdx*tdx + tdz*tdz);
+            if(td > 5) { moveX = tdx/td; moveZ = tdz/td; }
+            else bot.stateTimer = 0;
+            bot.yaw = Math.atan2(tdx, tdz);
+            break;
+        }
+        case 'chase': {
+            if(canSeeTarget) {
+                moveX = tx/distToTarget;
+                moveZ = tz/distToTarget;
+                bot.yaw += (angleToTarget - bot.yaw) * 0.08;
+                if(distToTarget < weapons[bot.weapon].range) {
+                    bot.state = 'attack';
+                    bot.stateTimer = 60;
+                }
+            } else { bot.stateTimer = 0; }
+            break;
+        }
+        case 'attack': {
+            if(canSeeTarget) {
+                bot.yaw += (angleToTarget - bot.yaw) * 0.1;
+                if(bot.strafeTimer <= 0) {
+                    bot.strafeDir *= -1;
+                    bot.strafeTimer = 30 + Math.random()*40;
+                }
+                const strafeAngle = bot.yaw + Math.PI/2;
+                moveX = Math.sin(strafeAngle) * bot.strafeDir * 0.5;
+                moveZ = Math.cos(strafeAngle) * bot.strafeDir * 0.5;
+
+                if(bot.shootCooldown <= 0 && distToTarget < weapons[bot.weapon].range) {
+                    botShoot(bot, target);
+                }
+            } else { bot.state = 'patrol'; bot.stateTimer = 0; }
+            break;
+        }
+        case 'flee': {
+            if(canSeeTarget) {
+                moveX = -tx/distToTarget;
+                moveZ = -tz/distToTarget;
+                bot.yaw = angleToTarget;
+                if(bot.shootCooldown <= 0) botShoot(bot, target);
+                if(distToTarget > 80) { bot.state = 'attack'; bot.stateTimer = 60; }
+            } else { bot.stateTimer = 0; }
+            break;
+        }
+    }
+
+    moveWithCollision(bot, moveX * bot.speed * 0.5, moveZ * bot.speed * 0.5, 5);
+
+    // Bot vs bot collision (물리)
+    for(const other of enemies) {
+        if(other === bot || other.hp <= 0) continue;
+        const bx = bot.x - other.x, bz = bot.z - other.z;
+        const bd = Math.sqrt(bx*bx + bz*bz);
+        if(bd < 10) {
+            bot.x += (bx/bd)*2;
+            bot.z += (bz/bd)*2;
+        }
+    }
+}
+
+function botShoot(bot, target) {
+    const w = weapons[bot.weapon];
+    bot.shootCooldown = w.fireRate + 20; // 더 긴 쿨다운
+    bot.muzzleFlash = 4;
+
+    const dist = target.dist;
+    const spread = w.spread * (1/bot.accuracy) * (dist > 100 ? 2.0 : 1.3);
+    const dx = target.x - bot.x + (Math.random()-0.5)*spread*dist;
+    const dz = target.z - bot.z + (Math.random()-0.5)*spread*dist;
+    const d = Math.sqrt(dx*dx + dz*dz);
+
+    const wallHit = raycast(bot.x, bot.z, dx/d, dz/d, dist);
+    if(wallHit.hit && wallHit.dist < dist) return;
+
+    if(w.explosive) {
+        bullets.push({
+            x:bot.x, y:8, z:bot.z,
+            vx:(dx/d)*5, vy:0.5, vz:(dz/d)*5,
+            damage:w.damage*0.4, owner:'bot', ownerRef:bot, life:80,
+            explosive:true, color:w.color
+        });
+    } else {
+        const hitChance = bot.accuracy * (dist < 50 ? 0.7 : dist < 100 ? 0.4 : 0.15);
+
+        if(target.type === 'player') {
+            // 플레이어에게 사격
+            if(Math.random() < hitChance && gameState === 'playing' && player.spawnProtection <= 0) {
+                const pellets = w.pellets || 1;
+                let totalDmg = 0;
+                for(let p=0;p<pellets;p++) {
+                    let dmg = w.damage * (0.5 + Math.random()*0.3);
+                    if(player.armor > 0) {
+                        const armorDmg = Math.min(player.armor, dmg*0.6);
+                        player.armor -= armorDmg;
+                        dmg *= 0.4;
+                    }
+                    totalDmg += dmg;
+                }
+                player.hp -= totalDmg;
+                player.damageFlash = 15;
+                addDamageNumber(player.x, player.y+16, player.z, Math.round(totalDmg), false);
+
+                if(player.hp <= 0) {
+                    player.deaths++;
+                    bot.kills++;
+                    player.killStreak = 0;
+                    addKillFeed(bot.name, '나', weapons[bot.weapon].name);
+                    gameState = 'dead';
+                    player.respawnTimer = 180;
+                }
+            }
+        } else if(target.type === 'bot') {
+            // 다른 봇에게 사격
+            const victim = target.ref;
+            if(Math.random() < hitChance && victim.hp > 0 && victim.spawnProtection <= 0) {
+                const pellets = w.pellets || 1;
+                let totalDmg = 0;
+                for(let p=0;p<pellets;p++) {
+                    let dmg = w.damage * (0.5 + Math.random()*0.3);
+                    if(victim.armor > 0) {
+                        const armorDmg = Math.min(victim.armor, dmg*0.6);
+                        victim.armor -= armorDmg;
+                        dmg *= 0.4;
+                    }
+                    totalDmg += dmg;
+                }
+                victim.hp -= totalDmg;
+                addDamageNumber(victim.x, victim.y+16, victim.z, Math.round(totalDmg), false);
+
+                // 맞은 봇이 반격
+                victim.state = 'chase';
+                victim.stateTimer = 120;
+
+                if(victim.hp <= 0) {
+                    bot.kills++;
+                    victim.deaths++;
+                    addKillFeed(bot.name, victim.name, weapons[bot.weapon].name);
+                    // 봇 리스폰
+                    for(let i=0;i<15;i++) addParticle(victim.x, victim.y+8, victim.z, (Math.random()-0.5)*5, Math.random()*5, (Math.random()-0.5)*5, victim.color, 30, 3);
+                    setTimeout(() => {
+                        const sp = spawnPoints[Math.floor(Math.random()*spawnPoints.length)];
+                        victim.x = sp.x + (Math.random()-0.5)*30;
+                        victim.z = sp.z + (Math.random()-0.5)*30;
+                        victim.hp = victim.maxHp;
+                        victim.armor = classes[victim.class].armor;
+                        victim.state = 'patrol';
+                        victim.spawnProtection = 120;
+                    }, 3000);
+                }
+            }
+        }
+    }
+
+    // Tracer
+    bullets.push({
+        x:bot.x, y:8, z:bot.z,
+        tx:target.x, ty:8, tz:target.z,
+        life:3, tracer:true, color:w.color
+    });
+}
+
+// ====== 3D PROJECTION ======
+function project(wx, wy, wz) {
+    const dx = wx - player.x;
+    const dy = wy - (player.y + 10);
+    const dz = wz - player.z;
+
+    const cosY = Math.cos(-yaw), sinY = Math.sin(-yaw);
+    const rx = dx * cosY - dz * sinY;
+    const rz = dx * sinY + dz * cosY;
+
+    const cosP = Math.cos(-pitch), sinP = Math.sin(-pitch);
+    const ry = dy * cosP - rz * sinP;
+    const rz2 = dy * sinP + rz * cosP;
+
+    if(rz2 < 1) return null;
+
+    const fov = player.scope ? 200 : 400;
+    const sx = W/2 + (rx / rz2) * fov;
+    const sy = H/2 - (ry / rz2) * fov;
+    const scale = fov / rz2;
+
+    return {x:sx, y:sy, z:rz2, scale};
+}
+
+// ====== RENDER ======
+function drawGround() {
+    // Sky gradient
+    const sky = ctx.createLinearGradient(0,0,0,H);
+    sky.addColorStop(0, '#1a0a2e');
+    sky.addColorStop(0.4, '#2d1b4e');
+    sky.addColorStop(0.6, '#4a2a5a');
+    sky.addColorStop(1, '#1a1a2e');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,W,H);
+
+    // Horizon
+    const horizonY = H/2 - Math.sin(pitch) * 400;
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, horizonY, W, H);
+
+    // Ground grid
+    ctx.strokeStyle = 'rgba(100,100,255,0.1)';
+    ctx.lineWidth = 1;
+    const gridSize = 40;
+    for(let gx = -MAP_SIZE; gx <= MAP_SIZE; gx += gridSize) {
+        const p1 = project(gx, 0, -MAP_SIZE);
+        const p2 = project(gx, 0, MAP_SIZE);
+        if(p1 && p2) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+        }
+    }
+    for(let gz = -MAP_SIZE; gz <= MAP_SIZE; gz += gridSize) {
+        const p1 = project(-MAP_SIZE, 0, gz);
+        const p2 = project(MAP_SIZE, 0, gz);
+        if(p1 && p2) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+        }
+    }
+}
+
+function drawWall(wall) {
+    const corners3D = [
+        [wall.x, 0, wall.z],
+        [wall.x+wall.w, 0, wall.z],
+        [wall.x+wall.w, 0, wall.z+wall.d],
+        [wall.x, 0, wall.z+wall.d],
+        [wall.x, wall.h, wall.z],
+        [wall.x+wall.w, wall.h, wall.z],
+        [wall.x+wall.w, wall.h, wall.z+wall.d],
+        [wall.x, wall.h, wall.z+wall.d]
+    ];
+
+    const projected = corners3D.map(c => project(c[0], c[1], c[2]));
+    if(projected.every(p => !p)) return;
+
+    const faces = [
+        [0,1,5,4], // front
+        [1,2,6,5], // right
+        [2,3,7,6], // back
+        [3,0,4,7], // left
+        [4,5,6,7]  // top
+    ];
+
+    const baseColor = wall.color || '#555';
+    const shades = [baseColor, shadeColor(baseColor,-20), shadeColor(baseColor,-40), shadeColor(baseColor,-20), shadeColor(baseColor,20)];
+
+    // Sort faces by average z
+    const faceData = faces.map((f, i) => {
+        const avgZ = f.reduce((s,idx) => s + (projected[idx]?projected[idx].z:999), 0) / 4;
+        return {indices:f, shade:shades[i], avgZ};
+    }).sort((a,b) => b.avgZ - a.avgZ);
+
+    for(const face of faceData) {
+        const pts = face.indices.map(i => projected[i]).filter(p => p);
+        if(pts.length < 3) continue;
+
+        ctx.fillStyle = face.shade;
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
+}
+
+function shadeColor(color, percent) {
+    const num = parseInt(color.replace('#',''), 16);
+    const r = Math.min(255, Math.max(0, (num >> 16) + percent));
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + percent));
+    const b = Math.min(255, Math.max(0, (num & 0x0000FF) + percent));
+    return '#' + (0x1000000 + r*0x10000 + g*0x100 + b).toString(16).slice(1);
+}
+
+function drawEnemy(enemy) {
+    if(enemy.hp <= 0) return;
+
+    const p = project(enemy.x, enemy.y, enemy.z);
+    if(!p || p.z < 2) return;
+
+    const s = p.scale;
+    const bodyH = 16 * s;
+    const bodyW = 8 * s;
+    const headR = 4 * s;
+
+    // Body
+    ctx.fillStyle = enemy.color;
+    ctx.fillRect(p.x - bodyW/2, p.y - bodyH, bodyW, bodyH * 0.7);
+
+    // Head
+    ctx.fillStyle = shadeColor(enemy.color, 30);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - bodyH - headR, headR, 0, Math.PI*2);
+    ctx.fill();
+
+    // Legs
+    ctx.fillStyle = shadeColor(enemy.color, -30);
+    ctx.fillRect(p.x - bodyW/3, p.y - bodyH*0.3, bodyW/4, bodyH*0.3);
+    ctx.fillRect(p.x + bodyW/8, p.y - bodyH*0.3, bodyW/4, bodyH*0.3);
+
+    // Arms / weapon
+    const gunDir = enemy.yaw - yaw;
+    ctx.fillStyle = '#444';
+    ctx.fillRect(p.x + Math.sin(gunDir)*bodyW*0.8, p.y - bodyH*0.6, bodyW*0.6, bodyW*0.15);
+
+    // Muzzle flash
+    if(enemy.muzzleFlash > 0) {
+        ctx.fillStyle = `rgba(255,200,50,${enemy.muzzleFlash/4})`;
+        const flashX = p.x + Math.sin(gunDir)*bodyW*1.5;
+        const flashY = p.y - bodyH*0.6;
+        ctx.beginPath();
+        ctx.arc(flashX, flashY, 5*s, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // HP bar
+    const barW = 40 * s;
+    const barY = p.y - bodyH - headR*2 - 8*s;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(p.x - barW/2, barY, barW, 4*s);
+    const hpRatio = enemy.hp / enemy.maxHp;
+    ctx.fillStyle = hpRatio > 0.5 ? '#4f4' : hpRatio > 0.25 ? '#ff4' : '#f44';
+    ctx.fillRect(p.x - barW/2, barY, barW * hpRatio, 4*s);
+
+    // Name
+    ctx.fillStyle = '#fff';
+    ctx.font = `${Math.max(8, 10*s)}px 'Segoe UI'`;
+    ctx.textAlign = 'center';
+    ctx.fillText(enemy.name, p.x, barY - 2*s);
+
+    // Distance
+    const dist = Math.round(Math.sqrt((enemy.x-player.x)**2 + (enemy.z-player.z)**2));
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = `${Math.max(6, 8*s)}px 'Segoe UI'`;
+    ctx.fillText(dist + 'm', p.x, barY - 12*s);
+}
+
+function drawHUD() {
+    const w = weapons[player.weapon];
+    const cls = classes[player.selectedClass];
+
+    // HP bar
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(20, H-60, 200, 20);
+    const hpR = player.hp / player.maxHp;
+    ctx.fillStyle = hpR > 0.5 ? '#4f4' : hpR > 0.25 ? '#ff4' : '#f44';
+    ctx.fillRect(20, H-60, 200*hpR, 20);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText(`❤ ${Math.ceil(player.hp)} / ${player.maxHp}`, 120, H-45);
+
+    // Armor bar
+    if(player.armor > 0 || classes[player.selectedClass].armor > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(20, H-85, 200, 14);
+        ctx.fillStyle = '#5bf';
+        ctx.fillRect(20, H-85, 200*(player.armor/classes[player.selectedClass].armor || 0), 14);
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px Segoe UI';
+        ctx.fillText(`🛡 ${Math.ceil(player.armor)}`, 120, H-74);
+    }
+
+    // Ammo
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 28px Segoe UI';
+    ctx.fillStyle = player.ammo[player.weapon] <= 5 ? '#f44' : '#fff';
+    ctx.fillText(player.ammo[player.weapon] + '', W-80, H-35);
+    ctx.font = '16px Segoe UI';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('/ ' + player.maxAmmo[player.weapon], W-30, H-35);
+
+    // Weapon name
+    ctx.font = 'bold 14px Segoe UI';
+    ctx.fillStyle = w.color;
+    ctx.fillText(w.name, W-30, H-60);
+
+    // Reload indicator
+    if(player.reloadTime > 0) {
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 18px Segoe UI';
+        ctx.fillStyle = '#ff0';
+        ctx.fillText('재장전 중...', W/2, H/2 + 60);
+        const rr = 1 - player.reloadTime / w.reloadSpeed;
+        ctx.fillStyle = 'rgba(255,255,0,0.3)';
+        ctx.fillRect(W/2-50, H/2+65, 100*rr, 4);
+    }
+
+    // Crosshair
+    if(!player.scope) {
+        // 조준점
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 2;
+        const cs = 14;
+        const gap = 5;
+        ctx.beginPath();
+        ctx.moveTo(W/2-cs, H/2); ctx.lineTo(W/2-gap, H/2);
+        ctx.moveTo(W/2+gap, H/2); ctx.lineTo(W/2+cs, H/2);
+        ctx.moveTo(W/2, H/2-cs); ctx.lineTo(W/2, H/2-gap);
+        ctx.moveTo(W/2, H/2+gap); ctx.lineTo(W/2, H/2+cs);
+        ctx.stroke();
+        // 중앙 빨간 점
+        ctx.fillStyle = 'rgba(255,50,50,0.9)';
+        ctx.beginPath();
+        ctx.arc(W/2, H/2, 2.5, 0, Math.PI*2);
+        ctx.fill();
+
+        // 적이 조준점 근처에 있으면 빨간 조준점으로 변경
+        let aimOnEnemy = false;
+        for(const e of enemies) {
+            if(e.hp <= 0) continue;
+            const p1 = project(e.x, e.y, e.z);
+            const p2 = project(e.x, e.y+16, e.z);
+            if(!p1 && !p2) continue;
+            const pp = p1 || p2;
+            const dx = W/2 - pp.x, dy = H/2 - pp.y;
+            if(Math.sqrt(dx*dx+dy*dy) < 50) { aimOnEnemy = true; break; }
+        }
+        if(aimOnEnemy) {
+            ctx.strokeStyle = 'rgba(255,50,50,0.9)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(W/2, H/2, 8, 0, Math.PI*2);
+            ctx.stroke();
+        }
+    }
+
+    // Scope overlay
+    if(player.scope) {
+        ctx.strokeStyle = 'rgba(0,200,255,0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H);
+        ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(W/2, H/2, 100, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(W/2, H/2, 200, 0, Math.PI*2);
+        ctx.stroke();
+
+        // Scope vignette
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.beginPath();
+        ctx.rect(0,0,W,H);
+        ctx.arc(W/2, H/2, 250, 0, Math.PI*2, true);
+        ctx.fill();
+    }
+
+    // Spawn protection indicator
+    if(player.spawnProtection > 0) {
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 16px Segoe UI';
+        ctx.fillStyle = `rgba(100,200,255,${0.5 + Math.sin(Date.now()*0.01)*0.3})`;
+        ctx.fillText('🛡 무적 ' + Math.ceil(player.spawnProtection/60) + '초', W/2, H/2 - 60);
+        // Blue border flash
+        ctx.strokeStyle = `rgba(100,200,255,${player.spawnProtection/180 * 0.3})`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(2, 2, W-4, H-4);
+    }
+
+    // Kill streak
+    if(player.killStreak >= 2 && Date.now() - player.lastKillTime < 3000) {
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 24px Segoe UI';
+        ctx.fillStyle = player.killStreak >= 5 ? '#f44' : player.killStreak >= 3 ? '#ff4' : '#4f4';
+        const streakTexts = ['','','더블 킬!','트리플 킬!','쿼드라 킬!','펜타 킬!!','갓라이크!!!'];
+        ctx.fillText(streakTexts[Math.min(player.killStreak, 6)], W/2, 80);
+    }
+
+    // KD
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 14px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`킬: ${player.kills}  데스: ${player.deaths}`, 20, 30);
+
+    // Class info
+    ctx.fillStyle = cls.color;
+    ctx.fillText(`${cls.name}`, 20, 50);
+
+    // Kill feed
+    ctx.textAlign = 'right';
+    ctx.font = '12px Segoe UI';
+    killFeed.forEach((kf, i) => {
+        const alpha = Math.min(1, kf.time/60);
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.fillText(`${kf.killer} ▸ ${kf.weapon} ▸ ${kf.victim}`, W-20, 30 + i*18);
+    });
+
+    // Minimap
+    const mmSize = 120, mmX = W-mmSize-15, mmY = H-mmSize-15;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(mmX, mmY, mmSize, mmSize);
+    ctx.strokeRect(mmX, mmY, mmSize, mmSize);
+
+    const mmScale = mmSize / (MAP_SIZE*2);
+
+    // Walls on minimap
+    ctx.fillStyle = 'rgba(100,100,150,0.5)';
+    walls.forEach(w => {
+        const wx = mmX + (w.x + MAP_SIZE) * mmScale;
+        const wz = mmY + (w.z + MAP_SIZE) * mmScale;
+        ctx.fillRect(wx, wz, Math.max(1, w.w*mmScale), Math.max(1, w.d*mmScale));
+    });
+
+    // Player on minimap
+    ctx.fillStyle = '#4f4';
+    const pmx = mmX + (player.x + MAP_SIZE) * mmScale;
+    const pmy = mmY + (player.z + MAP_SIZE) * mmScale;
+    ctx.beginPath(); ctx.arc(pmx, pmy, 3, 0, Math.PI*2); ctx.fill();
+    // Direction
+    ctx.strokeStyle = '#4f4';
+    ctx.beginPath();
+    ctx.moveTo(pmx, pmy);
+    ctx.lineTo(pmx - Math.sin(yaw)*10, pmy + Math.cos(yaw)*10);
+    ctx.stroke();
+
+    // Enemies on minimap
+    enemies.forEach(e => {
+        if(e.hp <= 0) return;
+        const ex = mmX + (e.x + MAP_SIZE) * mmScale;
+        const ez = mmY + (e.z + MAP_SIZE) * mmScale;
+        ctx.fillStyle = '#f44';
+        ctx.beginPath(); ctx.arc(ex, ez, 2, 0, Math.PI*2); ctx.fill();
+    });
+
+    // Damage flash
+    if(player.damageFlash > 0) {
+        ctx.fillStyle = `rgba(255,0,0,${player.damageFlash/30})`;
+        ctx.fillRect(0,0,W,H);
+    }
+
+    // Weapon model
+    drawWeaponModel();
+
+    // Dash cooldown
+    if(player.selectedClass === 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(20, H-110, 80, 14);
+        ctx.fillStyle = player.dashCooldown <= 0 ? '#4f4' : '#666';
+        ctx.fillRect(20, H-110, 80*(1-player.dashCooldown/classes[0].abilityCooldown), 14);
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText(player.dashCooldown <= 0 ? 'Shift 대시' : Math.ceil(player.dashCooldown/60)+'s', 60, H-100);
+    }
+
+    // Controls hint
+    ctx.textAlign = 'left';
+    ctx.font = '10px Segoe UI';
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText('WASD:이동 | 마우스:조준 | 좌클릭:사격 | 우클릭:스코프 | R:재장전 | Tab:스코어', 20, H-10);
+}
+
+function drawWeaponModel() {
+    const w = weapons[player.weapon];
+    const t = Date.now();
+    const isMoving = keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD'];
+    const bobX = isMoving ? Math.sin(t*0.01) * 3 : Math.sin(t*0.003) * 0.5;
+    const bobY = isMoving ? Math.abs(Math.cos(t*0.01)) * 4 : Math.cos(t*0.004) * 0.5;
+    const recoil = player.shootCooldown > 0 ? player.shootCooldown * 2 : 0;
+
+    if(player.scope) return;
+
+    ctx.save();
+
+    // 총 위치: 화면 정중앙 하단 - 총구가 위를 향하는 1인칭 시점
+    const gunX = W/2 + bobX;
+    const gunY = H + 30 + bobY + recoil;
+
+    ctx.translate(gunX, gunY);
+
+    const wpnIdx = player.weapon;
+
+    if(wpnIdx === 0) {
+        // ===== 돌격소총 (세로, 총구가 위) =====
+        // 양손
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(-35, -90, 22, 28); // 왼손 (총열 잡기)
+        ctx.fillRect(10, -50, 22, 28);  // 오른손 (그립)
+        // 총몸 (세로)
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(-12, -120, 24, 100);
+        // 상부 레일
+        ctx.fillStyle = '#3a3a3a';
+        ctx.fillRect(-14, -130, 28, 15);
+        // 총열
+        ctx.fillStyle = '#444';
+        ctx.fillRect(-8, -180, 16, 65);
+        // 총구
+        ctx.fillStyle = '#555';
+        ctx.fillRect(-10, -190, 20, 12);
+        // 탄창
+        ctx.fillStyle = '#333';
+        ctx.fillRect(12, -70, 14, 35);
+        // 그립
+        ctx.fillStyle = '#333';
+        ctx.fillRect(4, -30, 16, 30);
+        // 악센트
+        ctx.fillStyle = w.color;
+        ctx.fillRect(-15, -135, 30, 3);
+        ctx.fillRect(-3, -185, 6, 60);
+    } else if(wpnIdx === 1) {
+        // ===== 샷건 (세로) =====
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(-32, -100, 22, 28);
+        ctx.fillRect(8, -45, 22, 28);
+        // 총몸
+        ctx.fillStyle = '#5a4030';
+        ctx.fillRect(-14, -110, 28, 90);
+        // 더블배럴
+        ctx.fillStyle = '#3a3a3a';
+        ctx.fillRect(-12, -190, 10, 85);
+        ctx.fillRect(2, -190, 10, 85);
+        // 펌프
+        ctx.fillStyle = '#6a5540';
+        ctx.fillRect(-16, -115, 32, 20);
+        // 그립
+        ctx.fillStyle = '#5a4030';
+        ctx.fillRect(4, -25, 16, 30);
+        // 악센트
+        ctx.fillStyle = w.color;
+        ctx.fillRect(-16, -120, 32, 3);
+    } else if(wpnIdx === 2) {
+        // ===== 스나이퍼 (세로) =====
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(-28, -85, 20, 25);
+        ctx.fillRect(8, -45, 20, 25);
+        // 총몸
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(-10, -130, 20, 110);
+        // 긴 총열
+        ctx.fillStyle = '#444';
+        ctx.fillRect(-7, -210, 14, 85);
+        // 스코프
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-22, -125, 14, 40);
+        ctx.fillStyle = '#00ccff';
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(-19, -120, 8, 6);
+        ctx.fillRect(-19, -100, 8, 6);
+        ctx.globalAlpha = 1;
+        // 볼트
+        ctx.fillStyle = '#555';
+        ctx.fillRect(10, -100, 10, 8);
+        // 탄창
+        ctx.fillStyle = '#333';
+        ctx.fillRect(10, -65, 12, 25);
+        // 그립
+        ctx.fillStyle = '#333';
+        ctx.fillRect(4, -25, 16, 30);
+        // 악센트
+        ctx.fillStyle = w.color;
+        ctx.fillRect(-3, -205, 6, 80);
+    } else if(wpnIdx === 3) {
+        // ===== 로켓런처 (세로) =====
+        ctx.fillStyle = '#c4956a';
+        ctx.fillRect(-30, -80, 22, 24);
+        ctx.fillRect(8, -45, 22, 24);
+        // 발사관
+        ctx.fillStyle = '#3a5a3a';
+        ctx.fillRect(-18, -170, 36, 140);
+        // 발사구 (위)
+        ctx.fillStyle = '#2a2a2a';
+        ctx.beginPath();
+        ctx.arc(0, -175, 20, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(0, -175, 15, 0, Math.PI*2);
+        ctx.fill();
+        // 그립
+        ctx.fillStyle = '#444';
+        ctx.fillRect(4, -25, 14, 28);
+        // 조준기
+        ctx.fillStyle = '#555';
+        ctx.fillRect(-22, -160, 4, 12);
+        ctx.fillRect(18, -160, 4, 12);
+        // 악센트
+        ctx.fillStyle = w.color;
+        ctx.fillRect(-20, -172, 40, 2);
+        ctx.fillRect(-20, -35, 40, 2);
+    }
+
+    ctx.restore();
+
+    // 머즐 플래시 (총구 위치에서)
+    if(player.muzzleFlash > 0) {
+        const muzzleY2 = gunY - (wpnIdx===3 ? 175 : wpnIdx===2 ? 210 : 190) + recoil;
+        const intensity = player.muzzleFlash / 4;
+
+        ctx.fillStyle = `rgba(255,200,50,${intensity})`;
+        ctx.beginPath();
+        ctx.arc(gunX, muzzleY2, 14+Math.random()*8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,255,200,${intensity})`;
+        ctx.beginPath();
+        ctx.arc(gunX, muzzleY2, 7, 0, Math.PI*2);
+        ctx.fill();
+
+        // 총구 불꽃 라인
+        ctx.strokeStyle = `rgba(255,150,30,${intensity*0.5})`;
+        ctx.lineWidth = 2;
+        for(let i=0;i<5;i++){
+            const a = Math.random()*Math.PI*2;
+            const r = 15+Math.random()*15;
+            ctx.beginPath();
+            ctx.moveTo(gunX, muzzleY2);
+            ctx.lineTo(gunX+Math.cos(a)*r, muzzleY2+Math.sin(a)*r);
+            ctx.stroke();
+        }
+    }
+}
+
+function drawTitle() {
+    // BG
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+
+    // Animated bg
+    const t = Date.now()*0.001;
+    for(let i = 0; i < 50; i++) {
+        const x = (Math.sin(i*1.3+t)*0.5+0.5)*W;
+        const y = (Math.cos(i*0.7+t*0.5)*0.5+0.5)*H;
+        ctx.fillStyle = `rgba(255,50,50,${0.05+Math.sin(i+t)*0.03})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 2+Math.sin(i)*2, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 72px Segoe UI';
+    ctx.fillStyle = '#ff3333';
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 30;
+    ctx.fillText('RIVALS', W/2, H/2 - 60);
+    ctx.shadowBlur = 0;
+
+    ctx.font = 'bold 24px Segoe UI';
+    ctx.fillStyle = '#ff6b35';
+    ctx.fillText('라이벌 FPS', W/2, H/2 - 20);
+
+    ctx.font = '18px Segoe UI';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('클릭 또는 스페이스바를 눌러 시작', W/2, H/2 + 40);
+
+    // Controls
+    ctx.font = '14px Segoe UI';
+    ctx.fillStyle = '#666';
+    ctx.fillText('WASD: 이동 | 마우스: 조준 | 좌클릭: 사격 | R: 재장전', W/2, H/2 + 80);
+    ctx.fillText('우클릭: 스코프 | Tab: 스코어보드 | Shift: 대시', W/2, H/2 + 100);
+}
+
+function drawClassSelect() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+    canvas.style.cursor = 'default';
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 36px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('클래스 선택', W/2, 60);
+
+    ctx.font = '16px Segoe UI';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('클릭 또는 1~4 키를 눌러 선택하세요', W/2, 90);
+
+    classes.forEach((cls, i) => {
+        const x = 60 + i * 220;
+        const y = 140;
+        const w = 200, h = 380;
+
+        const hovered = canvasMouseX >= x && canvasMouseX <= x+w && canvasMouseY >= y && canvasMouseY <= y+h;
+        ctx.fillStyle = hovered ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
+        ctx.strokeStyle = cls.color;
+        ctx.lineWidth = hovered ? 3 : 2;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+        if(hovered) canvas.style.cursor = 'pointer';
+
+        // Number
+        ctx.font = 'bold 28px Segoe UI';
+        ctx.fillStyle = cls.color;
+        ctx.fillText((i+1)+'', x+w/2, y+40);
+
+        // Name
+        ctx.font = 'bold 22px Segoe UI';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(cls.name, x+w/2, y+75);
+
+        // Character icon
+        ctx.fillStyle = cls.color;
+        ctx.fillRect(x+w/2-15, y+100, 30, 50);
+        ctx.beginPath();
+        ctx.arc(x+w/2, y+90, 12, 0, Math.PI*2);
+        ctx.fill();
+
+        // Stats
+        ctx.font = '13px Segoe UI';
+        ctx.fillStyle = '#ccc';
+        ctx.fillText(cls.desc, x+w/2, y+180);
+
+        ctx.textAlign = 'left';
+        ctx.font = '12px Segoe UI';
+        const stats = [
+            `❤ 체력: ${cls.hp}`,
+            `🛡 방어: ${cls.armor}`,
+            `⚡ 속도: ${cls.speed}`,
+            `🔫 무기: ${weapons[cls.weapon].name}`,
+            `💥 데미지: ${weapons[cls.weapon].damage}`,
+            `🎯 사거리: ${weapons[cls.weapon].range}m`,
+            `🔥 스킬: ${cls.ability}`
+        ];
+        stats.forEach((s,j) => {
+            ctx.fillStyle = '#aaa';
+            ctx.fillText(s, x+15, y+210+j*22);
+        });
+        ctx.textAlign = 'center';
+    });
+}
+
+function drawDead() {
+    ctx.fillStyle = 'rgba(150,0,0,0.4)';
+    ctx.fillRect(0,0,W,H);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 48px Segoe UI';
+    ctx.fillStyle = '#ff3333';
+    ctx.fillText('전사했습니다', W/2, H/2-30);
+
+    player.respawnTimer = Math.max(0, player.respawnTimer-1);
+
+    ctx.font = '20px Segoe UI';
+    ctx.fillStyle = '#fff';
+    if(player.respawnTimer > 0) {
+        ctx.fillText(`부활까지 ${Math.ceil(player.respawnTimer/60)}초...`, W/2, H/2+20);
+    } else {
+        ctx.fillText('스페이스바를 눌러 부활', W/2, H/2+20);
+    }
+
+    ctx.font = '16px Segoe UI';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`킬: ${player.kills} | 데스: ${player.deaths} | K/D: ${player.deaths>0?(player.kills/player.deaths).toFixed(2):'∞'}`, W/2, H/2+60);
+}
+
+function drawScoreboard() {
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(W/2-300, 50, 600, H-100);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(W/2-300, 50, 600, H-100);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('스코어보드', W/2, 85);
+
+    // Header
+    ctx.font = 'bold 13px Segoe UI';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'left';
+    ctx.fillText('이름', W/2-260, 120);
+    ctx.fillText('클래스', W/2-100, 120);
+    ctx.textAlign = 'right';
+    ctx.fillText('킬', W/2+50, 120);
+    ctx.fillText('데스', W/2+120, 120);
+    ctx.fillText('K/D', W/2+200, 120);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(W/2-280, 125, 560, 1);
+
+    // All players sorted by kills
+    const allPlayers = [
+        {name:'나 (플레이어)', kills:player.kills, deaths:player.deaths, cls:classes[player.selectedClass], isPlayer:true},
+        ...enemies.map(e => ({name:e.name, kills:e.kills, deaths:e.deaths, cls:classes[e.class], isPlayer:false}))
+    ].sort((a,b) => b.kills - a.kills);
+
+    allPlayers.forEach((p, i) => {
+        const y = 150 + i*28;
+        if(p.isPlayer) {
+            ctx.fillStyle = 'rgba(100,255,100,0.1)';
+            ctx.fillRect(W/2-280, y-15, 560, 26);
+        }
+
+        ctx.font = '13px Segoe UI';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = p.isPlayer ? '#4f4' : '#fff';
+        ctx.fillText(p.name, W/2-260, y);
+        ctx.fillStyle = p.cls.color;
+        ctx.fillText(p.cls.name, W/2-100, y);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(p.kills+'', W/2+50, y);
+        ctx.fillText(p.deaths+'', W/2+120, y);
+        ctx.fillText(p.deaths>0 ? (p.kills/p.deaths).toFixed(1) : '∞', W/2+200, y);
+    });
+}
+
+// ====== MAIN UPDATE ======
+function update() {
+    if(gameState === 'playing') {
+        // Player movement
+        let mx = 0, mz = 0;
+        if(keys['KeyW']) { mx -= Math.sin(yaw); mz += Math.cos(yaw); }
+        if(keys['KeyS']) { mx += Math.sin(yaw); mz -= Math.cos(yaw); }
+        if(keys['KeyA']) { mx -= Math.cos(yaw); mz -= Math.sin(yaw); }
+        if(keys['KeyD']) { mx += Math.cos(yaw); mz += Math.sin(yaw); }
+
+        const len = Math.sqrt(mx*mx + mz*mz);
+        if(len > 0) { mx /= len; mz /= len; }
+
+        if(player.dashing) {
+            mx = player.dashDir.x;
+            mz = player.dashDir.z;
+            player.dashTime--;
+            if(player.dashTime <= 0) player.dashing = false;
+            moveWithCollision(player, mx * player.speed * 3, mz * player.speed * 3, 5);
+        } else {
+            const spd = player.scope ? player.speed * 0.4 : player.speed;
+            moveWithCollision(player, mx * spd, mz * spd, 5);
+        }
+
+        // Jump
+        if(keys['Space'] && player.onGround) {
+            player.vy = player.jumpForce;
+            player.onGround = false;
+        }
+        player.vy -= 0.4; // gravity
+        player.y += player.vy;
+        if(player.y <= 0) { player.y = 0; player.vy = 0; player.onGround = true; }
+
+        // Spawn protection countdown
+        if(player.spawnProtection > 0) {
+            player.spawnProtection--;
+        }
+
+        // Shooting
+        player.shootCooldown = Math.max(0, player.shootCooldown-1);
+        player.muzzleFlash = Math.max(0, player.muzzleFlash-1);
+        player.damageFlash = Math.max(0, player.damageFlash-1);
+        player.dashCooldown = Math.max(0, player.dashCooldown-1);
+
+        if(player.reloadTime > 0) {
+            player.reloadTime--;
+            if(player.reloadTime <= 0) {
+                player.ammo[player.weapon] = player.maxAmmo[player.weapon];
+            }
+        }
+
+        if(shooting && weapons[player.weapon].auto) playerShoot();
+        else if(shooting) { playerShoot(); shooting = false; }
+
+        // Update bots
+        enemies.forEach(updateBot);
+
+        // Update bullets
+        for(let i = bullets.length-1; i >= 0; i--) {
+            const b = bullets[i];
+            b.life--;
+            if(b.life <= 0) {
+                if(b.explosive) addExplosion(b.x, b.y, b.z, 40);
+                bullets.splice(i, 1);
+                continue;
+            }
+            if(b.tracer) continue;
+
+            b.x += b.vx; b.y += b.vy; b.z += b.vz;
+            b.vy -= 0.05;
+
+            // Collision
+            if(checkWallCollision(b.x, b.z, 2) || b.y <= 0) {
+                if(b.explosive) addExplosion(b.x, Math.max(0,b.y), b.z, 40);
+                bullets.splice(i, 1);
+            }
+        }
+
+        // Explosions damage
+        for(const exp of explosions) {
+            if(exp.time === 1) {
+                // Damage nearby
+                const dx = player.x - exp.x, dz = player.z - exp.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                if(dist < exp.radius && player.spawnProtection <= 0) {
+                    const dmg = 60 * (1 - dist/exp.radius);
+                    player.hp -= dmg;
+                    player.damageFlash = 15;
+                    if(player.hp <= 0) {
+                        player.deaths++;
+                        gameState = 'dead';
+                        player.respawnTimer = 180;
+                    }
+                }
+                enemies.forEach(e => {
+                    if(e.hp <= 0 || e.spawnProtection > 0) return;
+                    const edx = e.x - exp.x, edz = e.z - exp.z;
+                    const edist = Math.sqrt(edx*edx + edz*edz);
+                    if(edist < exp.radius) {
+                        const dmg = 60 * (1 - edist/exp.radius);
+                        e.hp -= dmg;
+                        if(e.hp <= 0) onEnemyKilled(e, false);
+                    }
+                });
+            }
+        }
+
+        // Update effects
+        for(let i = explosions.length-1; i >= 0; i--) {
+            explosions[i].time++;
+            if(explosions[i].time >= explosions[i].maxTime) explosions.splice(i, 1);
+        }
+
+        for(let i = particles.length-1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx; p.y += p.vy; p.z += p.vz;
+            p.vy -= 0.15;
+            p.life--;
+            if(p.life <= 0) particles.splice(i, 1);
+        }
+
+        for(let i = damageNumbers.length-1; i >= 0; i--) {
+            damageNumbers[i].time++;
+            damageNumbers[i].vy *= 0.95;
+            if(damageNumbers[i].time > 40) damageNumbers.splice(i, 1);
+        }
+
+        killFeed.forEach(kf => kf.time--);
+        killFeed = killFeed.filter(kf => kf.time > 0);
+
+        // Spawn bots
+        while(enemies.length < MAX_ENEMIES) spawnEnemy();
+    }
+}
+
+// ====== RENDER LOOP ======
+function render() {
+    ctx.clearRect(0,0,W,H);
+
+    if(gameState === 'title') { drawTitle(); }
+    else if(gameState === 'classSelect') { drawClassSelect(); }
+    else {
+        drawGround();
+
+        // Sort and draw walls by distance
+        const sortedWalls = walls.map(w => {
+            const cx = w.x + w.w/2 - player.x;
+            const cz = w.z + w.d/2 - player.z;
+            return {...w, dist: cx*cx + cz*cz};
+        }).sort((a,b) => b.dist - a.dist);
+
+        sortedWalls.forEach(drawWall);
+
+        // Draw enemies sorted by distance
+        const sortedEnemies = enemies.filter(e => e.hp > 0).map(e => {
+            const dx = e.x - player.x, dz = e.z - player.z;
+            return {...e, dist: dx*dx + dz*dz, ref:e};
+        }).sort((a,b) => b.dist - a.dist);
+
+        sortedEnemies.forEach(e => drawEnemy(e));
+
+        // Draw bullets
+        bullets.forEach(b => {
+            if(b.tracer) {
+                const p1 = project(b.x, b.y, b.z);
+                const p2 = project(b.tx, b.ty, b.tz);
+                if(p1 && p2) {
+                    ctx.strokeStyle = b.color || '#ff0';
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = b.life / 3;
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            } else {
+                const p = project(b.x, b.y, b.z);
+                if(p) {
+                    ctx.fillStyle = b.color || '#ff0';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, Math.max(2, 4*p.scale), 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        });
+
+        // Draw particles
+        particles.forEach(p => {
+            const pp = project(p.x, p.y, p.z);
+            if(pp) {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.beginPath();
+                ctx.arc(pp.x, pp.y, Math.max(1, p.size*pp.scale), 0, Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        });
+
+        // Draw explosions
+        explosions.forEach(exp => {
+            const p = project(exp.x, exp.y, exp.z);
+            if(p) {
+                const progress = exp.time / exp.maxTime;
+                const r = exp.radius * p.scale * (0.5 + progress * 0.5);
+                ctx.fillStyle = `rgba(255,${Math.floor(100+progress*100)},0,${1-progress})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+                ctx.fill();
+            }
+        });
+
+        // Damage numbers
+        damageNumbers.forEach(dn => {
+            const p = project(dn.x, dn.y + dn.time*0.5, dn.z);
+            if(p) {
+                ctx.font = `bold ${dn.crit ? 20 : 14}px Segoe UI`;
+                ctx.textAlign = 'center';
+                ctx.fillStyle = dn.crit ? '#ff0' : '#fff';
+                ctx.globalAlpha = 1 - dn.time/40;
+                ctx.fillText((dn.crit?'💥 ':'') + dn.dmg, p.x, p.y);
+                ctx.globalAlpha = 1;
+            }
+        });
+
+        drawHUD();
+
+        if(gameState === 'dead') drawDead();
+        if(gameState === 'scoreboard') drawScoreboard();
+    }
+}
+
+// ====== GAME LOOP ======
+generateMap();
+for(let i = 0; i < MAX_ENEMIES; i++) spawnEnemy();
+
+function gameLoop() {
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+gameLoop();
+</script>
+</body>
+</html>

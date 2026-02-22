@@ -1,0 +1,23 @@
+# Mac artifacts
+__MACOSX/
+
+# PowerShell scripts (local only)
+*.ps1
+
+# Python scripts (local only)
+*.py
+
+# Blender files
+*.blend
+*.blend1
+
+# Local dev
+server.ps1
+test_*.js
+blend_info.txt
+
+# Icons (generated locally)
+icons/
+
+# Claude config
+.claude/
