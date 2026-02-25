@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "create_icons_v2.ps1",
+      "debug-firestore.html",
+      "icons/**",
+      "*.ps1",
+      "*.md"
+    ]
+  }
+}

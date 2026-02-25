@@ -124,9 +124,11 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
 
 /* Welcome Screen */
 .welcome{
-  flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  flex:1;display:flex;flex-direction:column;align-items:center;
   background:var(--bg);gap:16px;
+  overflow-y:auto;padding:40px 0;
 }
+.welcome > *{flex-shrink:0}
 .welcome .big-icon{font-size:72px;opacity:0.3}
 .welcome h2{font-size:24px;color:#fff;font-weight:900}
 .welcome p{color:var(--text-dim);font-size:14px;max-width:400px;text-align:center;line-height:1.6}
@@ -189,6 +191,189 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
 .sidebar-login .login-btn{width:100%;justify-content:center;padding:8px;font-size:12px}
 .sidebar-login .logout-btn{font-size:10px;padding:3px 8px}
 
+/* Signature Game */
+.signature-game{
+  margin-top:20px;width:100%;max-width:480px;
+  background:linear-gradient(135deg,#1a0a0a 0%,#2a1020 40%,#1a0a1a 100%);
+  border:1px solid rgba(255,60,60,0.3);
+  border-radius:14px;overflow:hidden;cursor:pointer;
+  transition:all .25s ease;position:relative;
+  box-shadow:0 4px 24px rgba(255,50,50,0.1);
+  flex-shrink:0;
+}
+.signature-game:hover{
+  transform:translateY(-2px) scale(1.02);
+  border-color:rgba(255,60,60,0.6);
+  box-shadow:0 8px 36px rgba(255,50,50,0.25);
+}
+.sig-badge{
+  padding:6px 14px;font-size:10px;font-weight:800;
+  color:#ffd700;letter-spacing:2px;
+  background:rgba(255,215,0,0.08);
+  border-bottom:1px solid rgba(255,60,60,0.15);
+}
+.sig-content{
+  display:flex;align-items:center;gap:16px;
+  padding:16px 20px;
+}
+.sig-icon{font-size:42px;flex-shrink:0}
+.sig-info{flex:1;min-width:0}
+.sig-info h3{font-size:18px;font-weight:900;color:#fff;margin-bottom:3px}
+.sig-info p{font-size:11px;color:rgba(255,180,180,0.7);margin:0}
+.sig-play{
+  flex-shrink:0;padding:8px 18px;
+  background:linear-gradient(135deg,#dc2626,#b91c1c);
+  color:#fff;font-size:13px;font-weight:800;
+  border-radius:8px;letter-spacing:1px;
+  transition:all .2s;
+}
+.signature-game:hover .sig-play{
+  background:linear-gradient(135deg,#ef4444,#dc2626);
+  box-shadow:0 0 16px rgba(255,50,50,0.4);
+}
+
+/* Rivals + Chat Row */
+.rivals-chat-row{
+  margin-top:24px;width:100%;max-width:1060px;
+  display:flex;gap:20px;align-items:flex-start;
+  padding:0 16px;
+  flex-shrink:0;
+}
+
+/* Rivals Leaderboard */
+.rivals-board{
+  flex:1;min-width:0;
+  background:linear-gradient(180deg,#161b22 0%,#0d1117 100%);
+  border:1px solid rgba(255,60,60,0.2);
+  border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,0.3);
+}
+.rb-header{
+  padding:14px 18px;border-bottom:1px solid rgba(255,60,60,0.15);
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(90deg,rgba(255,40,40,0.08),transparent);
+}
+.rb-header h3{font-size:14px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px}
+.rb-header .rb-sub{font-size:11px;color:var(--text-dim)}
+.rb-table{width:100%;border-collapse:collapse}
+.rb-table thead th{
+  padding:8px 12px;font-size:10px;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:1px;font-weight:700;
+  border-bottom:1px solid var(--border);text-align:left;
+}
+.rb-table thead th:not(:first-child):not(:nth-child(2)){text-align:center}
+.rb-table tbody tr{border-bottom:1px solid rgba(255,255,255,0.04)}
+.rb-table tbody tr:last-child{border-bottom:none}
+.rb-table tbody tr:hover{background:rgba(255,60,60,0.05)}
+.rb-table tbody td{padding:10px 12px;font-size:12px;color:var(--text)}
+.rb-table tbody td:not(:first-child):not(:nth-child(2)){text-align:center}
+.rb-rank{width:28px;font-weight:800;font-size:14px;color:var(--text-dim)}
+.rb-rank.gold{color:#ffd700}
+.rb-rank.silver{color:#c0c0c0}
+.rb-rank.bronze{color:#cd7f32}
+.rb-name-cell{display:flex;align-items:center;gap:8px;min-width:0}
+.rb-avatar{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);object-fit:cover;flex-shrink:0}
+.rb-player-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.rb-me .rb-player-name{color:var(--accent)}
+.rb-kills{font-weight:800;color:#ef4444;font-size:13px}
+.rb-deaths{color:var(--text-dim);font-size:12px}
+.rb-kd{font-weight:700;font-size:12px}
+.rb-kd.good{color:#22c55e}
+.rb-kd.mid{color:#eab308}
+.rb-kd.bad{color:#ef4444}
+.rb-time{color:var(--text-dim);font-size:11px}
+.rb-login{color:var(--text-dim);font-size:10px;white-space:nowrap}
+.rb-body{max-height:360px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.rb-empty{padding:24px;text-align:center;color:var(--text-dim);font-size:13px}
+.rb-mystats{
+  padding:12px 18px;border-top:1px solid rgba(255,60,60,0.15);
+  display:flex;gap:16px;justify-content:center;
+  background:rgba(255,40,40,0.03);
+}
+.rb-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.rb-stat-val{font-size:16px;font-weight:800;color:#fff}
+.rb-stat-lbl{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px}
+
+/* Chat Box */
+.chat-box{
+  flex:1;min-width:0;
+  background:linear-gradient(180deg,#161b22 0%,#0d1117 100%);
+  border:1px solid rgba(88,166,255,0.2);
+  border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,0.3);
+}
+.cb-header{
+  padding:14px 18px;border-bottom:1px solid rgba(88,166,255,0.15);
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(90deg,rgba(88,166,255,0.08),transparent);
+}
+.cb-header h3{font-size:14px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px}
+.cb-header .cb-online{font-size:11px;color:var(--text-dim)}
+.cb-messages{
+  height:320px;overflow-y:auto;padding:12px 16px;
+  display:flex;flex-direction:column;gap:8px;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+.cb-messages::-webkit-scrollbar{width:5px}
+.cb-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.cb-msg{display:flex;gap:8px;align-items:flex-start}
+.cb-msg-avatar{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);object-fit:cover;flex-shrink:0;margin-top:2px}
+.cb-msg-body{flex:1;min-width:0}
+.cb-msg-top{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
+.cb-msg-name{font-size:12px;font-weight:700;color:var(--accent)}
+.cb-msg-time{font-size:9px;color:var(--text-dim)}
+.cb-msg-text{font-size:13px;color:var(--text);line-height:1.5;word-break:break-word}
+.cb-msg.me .cb-msg-name{color:#22c55e}
+.cb-msg.system{justify-content:center}
+.cb-msg.system .cb-msg-text{font-size:11px;color:var(--text-dim);text-align:center;font-style:italic}
+.cb-input-area{
+  padding:10px 14px;border-top:1px solid rgba(88,166,255,0.15);
+  display:flex;gap:8px;align-items:center;
+  background:rgba(88,166,255,0.03);
+}
+.cb-input{
+  flex:1;padding:8px 12px;font-size:13px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);outline:none;
+  font-family:inherit;transition:border-color .2s;
+}
+.cb-input:focus{border-color:var(--accent)}
+.cb-input::placeholder{color:var(--text-dim)}
+.cb-input:disabled{opacity:0.5;cursor:not-allowed}
+.cb-send{
+  padding:8px 14px;font-size:13px;font-weight:700;
+  background:var(--active);color:#fff;border:none;
+  border-radius:8px;cursor:pointer;transition:all .15s;
+  font-family:inherit;white-space:nowrap;
+}
+.cb-send:hover{background:#3b82f6}
+.cb-send:disabled{opacity:0.4;cursor:not-allowed}
+.cb-empty{padding:24px;text-align:center;color:var(--text-dim);font-size:13px;margin:auto}
+
+/* Loading Skeleton */
+@keyframes shimmer{
+  0%{background-position:-400px 0}
+  100%{background-position:400px 0}
+}
+.skeleton-row{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+}
+.skeleton-circle{
+  width:24px;height:24px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%);
+  background-size:800px;animation:shimmer 1.5s infinite;
+}
+.skeleton-bar{
+  height:10px;border-radius:4px;
+  background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%);
+  background-size:800px;animation:shimmer 1.5s infinite;
+}
+.skeleton-bar.w40{width:40%}.skeleton-bar.w60{width:60%}.skeleton-bar.w30{width:30%}.skeleton-bar.w20{width:20%}
+.cb-skeleton-msg{
+  display:flex;gap:8px;align-items:flex-start;padding:4px 0;
+}
+.cb-skeleton-lines{flex:1;display:flex;flex-direction:column;gap:6px}
+
 /* Fullscreen */
 .fullscreen .sidebar{margin-left:calc(var(--sidebar-w) * -1)}
 .fullscreen .topbar{display:none}
@@ -240,6 +425,33 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
   .sidebar-footer kbd { display: none; }
   .sidebar-footer { font-size: 0; }
 
+  /* Signature Game mobile */
+  .signature-game { max-width: 100%; margin-left: 12px; margin-right: 12px; }
+  .sig-icon { font-size: 32px; }
+  .sig-info h3 { font-size: 15px; }
+  .sig-play { padding: 6px 14px; font-size: 12px; }
+
+  /* Rivals Board mobile */
+  .rivals-board { max-width: 100%; margin-left: 12px; margin-right: 12px; }
+  .rb-body { max-height: 240px; }
+  .rb-table thead th, .rb-table tbody td { padding: 8px 6px; font-size: 10px; }
+  .rb-time { font-size: 9px; }
+  .rb-login { font-size: 9px; }
+  .rb-mystats { gap: 10px; padding: 10px 12px; }
+  .rb-stat-val { font-size: 14px; }
+
+  /* Rivals + Chat Row mobile */
+  .rivals-chat-row { flex-direction: column; padding: 0; }
+
+  /* Chat Box mobile */
+  .chat-box { max-width: 100%; margin-left: 12px; margin-right: 12px; margin-top: 16px; }
+  .cb-messages { height: 200px; }
+  .cb-msg-avatar { width: 20px; height: 20px; }
+  .cb-msg-name { font-size: 11px; }
+  .cb-msg-text { font-size: 12px; }
+  .cb-input { font-size: 12px; padding: 7px 10px; }
+  .cb-send { padding: 7px 12px; font-size: 12px; }
+
   /* Login area mobile */
   .user-name { display: none; }
   .login-area { padding-left: 4px; }
@@ -252,29 +464,29 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
 <div class="app" id="app">
   <!-- Sidebar -->
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-header">
+    <div class="sidebar-header" onclick="goHome()" style="cursor:pointer" title="홈으로 돌아가기">
       <span class="logo">🎮</span>
       <h1>Game Hub</h1>
-      <span class="badge">16</span>
+      <span class="badge">17</span>
     </div>
 
     <div class="game-list" id="gameList">
       <div class="category">🎯 액션 / 플랫포머</div>
-      <a class="game-item" data-src="celeste.html" data-title="Celeste - 산을 올라라">
+      <a class="game-item" data-src="celeste.html" data-title="Celeste - 산을 올라라" data-mobile="1">
         <span class="icon">🏔️</span>
         <div class="info">
           <span class="name">Celeste</span>
           <span class="desc">산을 올라라 - 플랫포머</span>
         </div>
       </a>
-      <a class="game-item" data-src="platformer.html" data-title="Platformer">
+      <a class="game-item" data-src="platformer.html" data-title="Platformer" data-mobile="1">
         <span class="icon">🕹️</span>
         <div class="info">
           <span class="name">Platformer</span>
           <span class="desc">클래식 플랫포머</span>
         </div>
       </a>
-      <a class="game-item" data-src="jumpmap.html" data-title="바이크 점프맵">
+      <a class="game-item" data-src="jumpmap.html" data-title="바이크 점프맵" data-mobile="1">
         <span class="icon">🏍️</span>
         <div class="info">
           <span class="name">바이크 점프맵</span>
@@ -283,21 +495,21 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       </a>
 
       <div class="category">⚔️ RPG / 로그라이크</div>
-      <a class="game-item" data-src="dungeon.html" data-title="어둠의 탑 - Dark Tower RPG">
+      <a class="game-item" data-src="dungeon.html" data-title="어둠의 탑 - Dark Tower RPG" data-mobile="1">
         <span class="icon">⚔️</span>
         <div class="info">
           <span class="name">어둠의 탑</span>
           <span class="desc">Dark Tower RPG - 100층 던전</span>
         </div>
       </a>
-      <a class="game-item" data-src="roguelike.html" data-title="던전 서바이버">
+      <a class="game-item" data-src="roguelike.html" data-title="던전 서바이버" data-mobile="1">
         <span class="icon">🧟</span>
         <div class="info">
           <span class="name">던전 서바이버</span>
           <span class="desc">뱀서라이크 던전 크롤러</span>
         </div>
       </a>
-      <a class="game-item" data-src="balatro.html" data-title="Balatro - 포커 로그라이크">
+      <a class="game-item" data-src="balatro.html" data-title="Balatro - 포커 로그라이크" data-mobile="1">
         <span class="icon">🃏</span>
         <div class="info">
           <span class="name">Balatro</span>
@@ -322,14 +534,14 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       </a>
 
       <div class="category">🏎️ 레이싱</div>
-      <a class="game-item" data-src="racing.html" data-title="모토크로스 레이싱">
+      <a class="game-item" data-src="racing.html" data-title="모토크로스 레이싱" data-mobile="1">
         <span class="icon">🏍️</span>
         <div class="info">
           <span class="name">모토크로스 레이싱</span>
           <span class="desc">AI 레이싱 + 드리프트</span>
         </div>
       </a>
-      <a class="game-item" data-src="snowboard/index.html" data-title="Alpine Rush - Downhill Snowboard">
+      <a class="game-item" data-src="snowboard/index.html" data-title="Alpine Rush - Downhill Snowboard" data-mobile="1">
         <span class="icon">🏂</span>
         <div class="info">
           <span class="name">Alpine Rush</span>
@@ -338,14 +550,14 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       </a>
 
       <div class="category">🚀 슈팅</div>
-      <a class="game-item" data-src="space-shooter.html" data-title="스페이스 슈터">
+      <a class="game-item" data-src="space-shooter.html" data-title="스페이스 슈터" data-mobile="1">
         <span class="icon">🚀</span>
         <div class="info">
           <span class="name">스페이스 슈터</span>
           <span class="desc">아케이드 우주 슈팅</span>
         </div>
       </a>
-      <a class="game-item" data-src="rivals.html" data-title="라이벌 FPS">
+      <a class="game-item" data-src="rivals.html" data-title="라이벌 FPS" data-mobile="1">
         <span class="icon">🔫</span>
         <div class="info">
           <span class="name">라이벌 FPS</span>
@@ -354,6 +566,13 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
       </a>
 
       <div class="category">🧩 퍼즐 / 어드벤처</div>
+      <a class="game-item" data-src="candy-crush.html" data-title="색깔 크러시" data-mobile="1">
+        <span class="icon">🍬</span>
+        <div class="info">
+          <span class="name">색깔 크러시</span>
+          <span class="desc">매치-3 퍼즐</span>
+        </div>
+      </a>
       <a class="game-item" data-src="escape-room.html" data-title="방탈출 게임">
         <span class="icon">🔐</span>
         <div class="info">
@@ -437,6 +656,65 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
         <button class="login-btn google" onclick="googleLogin()" style="padding:10px 24px;font-size:14px;border-radius:8px">G Google로 로그인</button>
         <p style="margin-top:8px;font-size:11px;color:var(--text-dim)">로그인하면 게임 점수를 저장할 수 있어요</p>
       </div>
+      <!-- Signature Game -->
+      <div class="signature-game" onclick="playSignatureGame()">
+        <div class="sig-badge">⭐ SIGNATURE GAME</div>
+        <div class="sig-content">
+          <span class="sig-icon">🔫</span>
+          <div class="sig-info">
+            <h3>라이벌 FPS</h3>
+            <p>1인칭 슈팅 대전 · 실시간 멀티플레이</p>
+          </div>
+          <span class="sig-play">▶ PLAY</span>
+        </div>
+      </div>
+
+      <!-- Rivals + Chat Row -->
+      <div class="rivals-chat-row">
+      <!-- Rivals Leaderboard -->
+      <div class="rivals-board" id="rivalsBoard">
+        <div class="rb-header">
+          <h3>🔫 라이벌 FPS 랭킹</h3>
+          <span class="rb-sub" id="rbPlayerCount"></span>
+        </div>
+        <div class="rb-body">
+          <table class="rb-table">
+            <thead><tr>
+              <th>#</th><th>플레이어</th><th>킬</th><th>데스</th><th>K/D</th><th>플레이</th><th>최근접속</th>
+            </tr></thead>
+            <tbody id="rbBody">
+              <tr><td colspan="7" style="padding:0"><div class="skeleton-row"><div class="skeleton-circle"></div><div class="skeleton-bar w60" style="animation-delay:0s"></div><div class="skeleton-bar w20" style="animation-delay:.1s"></div></div></td></tr>
+              <tr><td colspan="7" style="padding:0"><div class="skeleton-row"><div class="skeleton-circle"></div><div class="skeleton-bar w40" style="animation-delay:.2s"></div><div class="skeleton-bar w30" style="animation-delay:.3s"></div></div></td></tr>
+              <tr><td colspan="7" style="padding:0"><div class="skeleton-row"><div class="skeleton-circle"></div><div class="skeleton-bar w60" style="animation-delay:.4s"></div><div class="skeleton-bar w20" style="animation-delay:.5s"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rb-mystats" id="rbMyStats" style="display:none">
+          <div class="rb-stat"><span class="rb-stat-val" id="myKills">0</span><span class="rb-stat-lbl">킬</span></div>
+          <div class="rb-stat"><span class="rb-stat-val" id="myDeaths">0</span><span class="rb-stat-lbl">데스</span></div>
+          <div class="rb-stat"><span class="rb-stat-val" id="myKD">-</span><span class="rb-stat-lbl">K/D</span></div>
+          <div class="rb-stat"><span class="rb-stat-val" id="myTime">0분</span><span class="rb-stat-lbl">플레이</span></div>
+        </div>
+      </div>
+
+      <!-- Chat Box -->
+      <div class="chat-box" id="chatBox">
+        <div class="cb-header">
+          <h3>💬 채팅</h3>
+          <span class="cb-online" id="cbOnline"></span>
+        </div>
+        <div class="cb-messages" id="cbMessages">
+          <div class="cb-skeleton-msg"><div class="skeleton-circle"></div><div class="cb-skeleton-lines"><div class="skeleton-bar w40" style="animation-delay:0s"></div><div class="skeleton-bar w60" style="animation-delay:.15s"></div></div></div>
+          <div class="cb-skeleton-msg"><div class="skeleton-circle"></div><div class="cb-skeleton-lines"><div class="skeleton-bar w30" style="animation-delay:.3s"></div><div class="skeleton-bar w40" style="animation-delay:.45s"></div></div></div>
+          <div class="cb-skeleton-msg"><div class="skeleton-circle"></div><div class="cb-skeleton-lines"><div class="skeleton-bar w60" style="animation-delay:.6s"></div><div class="skeleton-bar w30" style="animation-delay:.75s"></div></div></div>
+        </div>
+        <div class="cb-input-area">
+          <input class="cb-input" id="cbInput" type="text" placeholder="메시지를 입력하세요..." maxlength="200" disabled>
+          <button class="cb-send" id="cbSend" disabled>전송</button>
+        </div>
+      </div>
+      </div><!-- /rivals-chat-row -->
+
       <div class="shortcut-hint">
         <div class="key"><kbd>Esc</kbd> 사이드바 토글</div>
         <div class="key"><kbd>F11</kbd> 전체화면</div>
@@ -453,7 +731,8 @@ html,body{height:100%;overflow:hidden;font-family:'Noto Sans KR','Segoe UI',sans
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCkjCp8JsQuBV9QV8qBYz0vUA5wNX2yHIo",
@@ -467,12 +746,47 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
+const db = getFirestore(app);
+
+// 카카오톡 인앱 브라우저 감지
+function isKakaoTalk() {
+  return /KAKAOTALK/i.test(navigator.userAgent);
+}
 
 // 전역으로 노출 (게임 iframe에서 접근 가능하도록)
 window.giylAuth = auth;
 window.giylUser = null;
+window.giylScores = {}; // 클라우드 점수 캐시
+
+// 카카오톡 인앱 → 외부 브라우저로 열기
+function openInExternalBrowser() {
+  const currentUrl = window.location.href;
+  // 카카오톡 인앱 브라우저에서 외부 브라우저 열기
+  if (/android/i.test(navigator.userAgent)) {
+    // Android: intent 스킴으로 Chrome 열기
+    window.location.href = 'intent://' + currentUrl.replace(/https?:\/\//, '') +
+      '#Intent;scheme=https;package=com.android.chrome;end';
+  } else {
+    // iOS: Safari로 열기 (카카오톡 JS SDK 방식)
+    window.location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(currentUrl);
+  }
+}
+
+// redirect 결과 처리 (카카오톡에서 signInWithRedirect 사용 시)
+getRedirectResult(auth).catch(err => {
+  if (err.code !== 'auth/popup-closed-by-user') {
+    console.error('redirect 로그인 결과 오류:', err);
+  }
+});
 
 window.googleLogin = async function() {
+  // 카카오톡 인앱 브라우저인 경우 외부 브라우저로 열기
+  if (isKakaoTalk()) {
+    if (confirm('카카오톡 내에서는 구글 로그인이 제한됩니다.\n외부 브라우저로 열까요?')) {
+      openInExternalBrowser();
+    }
+    return;
+  }
   try {
     await signInWithPopup(auth, provider);
   } catch (error) {
@@ -480,6 +794,15 @@ window.googleLogin = async function() {
     if (error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
       alert('Firebase 설정이 필요합니다.\nindex.html의 firebaseConfig를 업데이트해주세요.');
       return;
+    }
+    // 팝업 차단된 경우 redirect 방식으로 폴백
+    if (error.code === 'auth/popup-blocked') {
+      try {
+        await signInWithRedirect(auth, provider);
+        return;
+      } catch (e) {
+        console.error('redirect 로그인 오류:', e);
+      }
     }
     console.error('로그인 오류:', error);
     alert('로그인 중 오류가 발생했습니다: ' + error.message);
@@ -494,7 +817,99 @@ window.googleLogout = async function() {
   }
 };
 
-function updateLoginUI(user) {
+// ====== Rivals Stats Firestore ======
+// 컬렉션: rivals/{userId} → { kills, deaths, playtime, lastLogin, name, photo }
+
+async function loadRivalsStats(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'rivals', uid));
+    if (snap.exists()) return snap.data();
+  } catch(e) { console.error('스탯 로드 오류:', e); }
+  return null;
+}
+
+async function saveRivalsStats(uid, stats) {
+  try {
+    await setDoc(doc(db, 'rivals', uid), stats, { merge: true });
+  } catch(e) { console.error('스탯 저장 오류:', e); }
+}
+
+async function loadAllRivalsStats() {
+  try {
+    console.log('리더보드 로드 시작...');
+    const snap = await getDocs(collection(db, 'rivals'));
+    const all = [];
+    snap.forEach(d => all.push({ uid: d.id, ...d.data() }));
+    console.log('리더보드 로드 완료:', all.length, '명');
+    return all;
+  } catch(e) { console.error('리더보드 로드 오류:', e.code, e.message); return []; }
+}
+
+// 게임에서 호출: { kills, deaths, playtime } 증분 업데이트 (즉시 저장)
+async function reportRivalsStats(deltaKills, deltaDeaths, deltaPlaytime) {
+  const user = window.giylUser;
+  if (!user) { console.warn('저장 실패: 로그인 안 됨'); return; }
+  const uid = user.uid;
+  console.log(`[Rivals] 보고: +${deltaKills}킬, +${deltaDeaths}데스, +${deltaPlaytime}분`);
+  // 로컬 캐시에서 즉시 업데이트
+  const cached = window._rivalsMyStats || { kills:0, deaths:0, playtime:0 };
+  cached.kills = (cached.kills || 0) + deltaKills;
+  cached.deaths = (cached.deaths || 0) + deltaDeaths;
+  cached.playtime = (cached.playtime || 0) + deltaPlaytime;
+  cached.lastLogin = Date.now();
+  cached.name = user.displayName || user.email || '익명';
+  cached.photo = user.photoURL || '';
+  window._rivalsMyStats = cached;
+
+  // Firestore 즉시 저장 (await로 완료 보장)
+  console.log('[Rivals] Firestore 저장 중...', cached);
+  await saveRivalsStats(uid, cached);
+  console.log('[Rivals] Firestore 저장 완료!');
+  // 리더보드 새로고침
+  const all = await loadAllRivalsStats();
+  if (typeof window.renderRivalsBoard === 'function') window.renderRivalsBoard(all);
+}
+
+window._reportRivals = reportRivalsStats;
+window._loadAllRivals = loadAllRivalsStats;
+
+// ====== 채팅 Firestore ======
+// 컬렉션: chat/{docId} → { uid, name, photo, text, createdAt }
+let chatUnsubscribe = null;
+
+async function sendChatMessage(text) {
+  const user = window.giylUser;
+  if (!user || !text.trim()) return;
+  try {
+    await addDoc(collection(db, 'chat'), {
+      uid: user.uid,
+      name: user.displayName || user.email || '익명',
+      photo: user.photoURL || '',
+      text: text.trim().substring(0, 200),
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.error('채팅 전송 오류:', e); }
+}
+
+function startChatListener() {
+  if (chatUnsubscribe) chatUnsubscribe();
+  const q = query(collection(db, 'chat'), orderBy('createdAt', 'desc'), limit(50));
+  chatUnsubscribe = onSnapshot(q, (snapshot) => {
+    const msgs = [];
+    snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+    msgs.reverse(); // 오래된 순서로
+    if (typeof window.renderChatMessages === 'function') {
+      window.renderChatMessages(msgs);
+    }
+  }, (err) => {
+    console.error('채팅 리스너 오류:', err);
+  });
+}
+
+window._sendChat = sendChatMessage;
+window._startChatListener = startChatListener;
+
+async function updateLoginUI(user) {
   window.giylUser = user;
   const topbarLogin = document.getElementById('topbarLogin');
   const sidebarLogin = document.getElementById('sidebarLogin');
@@ -521,15 +936,48 @@ function updateLoginUI(user) {
 
     welcomeTitle.textContent = `${name}님, 환영합니다!`;
     welcomeLogin.style.display = 'none';
+
+    // Rivals 스탯 로드 + lastLogin 업데이트
+    const myStats = await loadRivalsStats(user.uid);
+    if (myStats) {
+      window._rivalsMyStats = myStats;
+      // lastLogin 업데이트
+      await saveRivalsStats(user.uid, { ...myStats, lastLogin: Date.now(), name: user.displayName || user.email || '익명', photo: user.photoURL || '' });
+    } else {
+      // 신규 유저: localStorage에서 마이그레이션
+      const legacyKills = parseInt(localStorage.getItem('rivals_total_kills') || '0');
+      const initStats = { kills: legacyKills, deaths: 0, playtime: 0, lastLogin: Date.now(), name: user.displayName || user.email || '익명', photo: user.photoURL || '' };
+      await saveRivalsStats(user.uid, initStats);
+      window._rivalsMyStats = initStats;
+    }
+    // 리더보드 로드
+    const allStats = await loadAllRivalsStats();
+    if (typeof window.renderRivalsBoard === 'function') window.renderRivalsBoard(allStats);
+    // 채팅 활성화
+    const cbInput = document.getElementById('cbInput');
+    const cbSend = document.getElementById('cbSend');
+    if (cbInput) { cbInput.disabled = false; cbInput.placeholder = '메시지를 입력하세요...'; }
+    if (cbSend) cbSend.disabled = false;
+    startChatListener();
   } else {
     topbarLogin.innerHTML = `<button class="login-btn google" onclick="googleLogin()">G 로그인</button>`;
     sidebarLogin.innerHTML = `<button class="login-btn google" onclick="googleLogin()">G 로그인</button>`;
     welcomeTitle.textContent = '게임을 선택하세요';
     welcomeLogin.style.display = '';
+    window._rivalsMyStats = null;
+    if (typeof window.renderRivalsBoard === 'function') window.renderRivalsBoard([]);
+    // 채팅 비활성화
+    const cbInput2 = document.getElementById('cbInput');
+    const cbSend2 = document.getElementById('cbSend');
+    if (cbInput2) { cbInput2.disabled = true; cbInput2.placeholder = '로그인 후 이용 가능'; }
+    if (cbSend2) cbSend2.disabled = true;
+    // 로그인 안 해도 채팅은 볼 수 있도록 리스너 시작
+    startChatListener();
   }
 }
 
 onAuthStateChanged(auth, updateLoginUI);
+
 </script>
 
 <script>
@@ -545,6 +993,39 @@ const app = document.getElementById('app');
 
 let currentGame = null;
 const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+
+// 모바일: 모바일 미지원 게임 숨기기
+if(('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 1024){
+  document.querySelectorAll('.game-item').forEach(item => {
+    if(!item.dataset.mobile) item.style.display = 'none';
+  });
+  // 빈 카테고리 숨기기
+  document.querySelectorAll('.category').forEach(cat => {
+    let next = cat.nextElementSibling;
+    let hasVisible = false;
+    while(next && !next.classList.contains('category')){
+      if(next.classList.contains('game-item') && next.style.display !== 'none') hasVisible = true;
+      next = next.nextElementSibling;
+    }
+    if(!hasVisible) cat.style.display = 'none';
+  });
+}
+
+function playSignatureGame() {
+  const item = document.querySelector('[data-src="rivals.html"]');
+  if (item) loadGame(item);
+}
+
+function goHome() {
+  document.querySelectorAll('.game-item').forEach(el => el.classList.remove('active'));
+  welcome.style.display = '';
+  gameFrame.style.display = 'none';
+  topbar.style.display = 'none';
+  gameIframe.src = '';
+  currentGame = null;
+  sessionStorage.removeItem('lastGame');
+  if (isMobile()) closeSidebar();
+}
 
 function openSidebar() {
   if (isMobile()) {
@@ -653,19 +1134,197 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Restore last game from sessionStorage
-const lastGame = sessionStorage.getItem('lastGame');
-if (lastGame) {
-  const item = document.querySelector(`[data-src="${lastGame}"]`);
-  if (item) loadGame(item);
+// ===== Rivals FPS Leaderboard =====
+
+function formatPlaytime(minutes) {
+  if (!minutes || minutes < 1) return '0분';
+  if (minutes < 60) return Math.round(minutes) + '분';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h + '시간' + (m > 0 ? ' ' + m + '분' : '');
 }
 
-// Save current game
-const origLoadGame = loadGame;
-loadGame = function(item) {
-  origLoadGame(item);
-  sessionStorage.setItem('lastGame', item.dataset.src);
+function formatLastLogin(ts) {
+  if (!ts) return '-';
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '방금';
+  if (mins < 60) return mins + '분 전';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + '시간 전';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + '일 전';
+  return Math.floor(days / 30) + '개월 전';
+}
+
+window.renderRivalsBoard = function(allStats) {
+  const tbody = document.getElementById('rbBody');
+  const countEl = document.getElementById('rbPlayerCount');
+  const myStatsEl = document.getElementById('rbMyStats');
+
+  if (!allStats || allStats.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="rb-empty">아직 참전한 플레이어가 없습니다</td></tr>';
+    countEl.textContent = '';
+    myStatsEl.style.display = 'none';
+    return;
+  }
+
+  // 킬 수 기준 정렬
+  allStats.sort((a, b) => (b.kills || 0) - (a.kills || 0));
+  countEl.textContent = allStats.length + '명 참전';
+
+  const myUid = window.giylUser?.uid;
+  let html = '';
+  allStats.forEach((s, i) => {
+    const rank = i + 1;
+    const rankClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+    const rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+    const isMe = s.uid === myUid;
+    const kd = (s.deaths || 0) > 0 ? ((s.kills || 0) / s.deaths).toFixed(2) : (s.kills > 0 ? '∞' : '-');
+    const kdClass = kd === '∞' || kd === '-' ? 'good' : parseFloat(kd) >= 2 ? 'good' : parseFloat(kd) >= 1 ? 'mid' : 'bad';
+    const photo = s.photo ? `<img class="rb-avatar" src="${s.photo}" alt="" referrerpolicy="no-referrer">` : '';
+    html += `<tr class="${isMe ? 'rb-me' : ''}">
+      <td class="rb-rank ${rankClass}">${rankIcon}</td>
+      <td><div class="rb-name-cell">${photo}<span class="rb-player-name">${s.name || '익명'}</span></div></td>
+      <td class="rb-kills">${(s.kills || 0).toLocaleString()}</td>
+      <td class="rb-deaths">${(s.deaths || 0).toLocaleString()}</td>
+      <td class="rb-kd ${kdClass}">${kd}</td>
+      <td class="rb-time">${formatPlaytime(s.playtime || 0)}</td>
+      <td class="rb-login">${formatLastLogin(s.lastLogin)}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+
+  // 내 통계 하단 표시
+  if (myUid) {
+    const my = allStats.find(s => s.uid === myUid);
+    if (my) {
+      myStatsEl.style.display = '';
+      document.getElementById('myKills').textContent = (my.kills || 0).toLocaleString();
+      document.getElementById('myDeaths').textContent = (my.deaths || 0).toLocaleString();
+      const myKd = (my.deaths || 0) > 0 ? ((my.kills || 0) / my.deaths).toFixed(2) : (my.kills > 0 ? '∞' : '-');
+      document.getElementById('myKD').textContent = myKd;
+      document.getElementById('myTime').textContent = formatPlaytime(my.playtime || 0);
+    } else {
+      myStatsEl.style.display = 'none';
+    }
+  } else {
+    myStatsEl.style.display = 'none';
+  }
 };
+
+// 게임에서 호출: 킬/데스/플레이시간 보고 (Promise 반환)
+window.giylReportRivals = async function(deltaKills, deltaDeaths, deltaPlaytime) {
+  if (window._reportRivals) {
+    await window._reportRivals(deltaKills, deltaDeaths, deltaPlaytime);
+  }
+};
+
+// 게임에서 호출: 점수 보고 (최고점만 유지)
+window.giylReportScore = async function(gameId, score) {
+  const user = window.giylUser;
+  if (!user || !score || score <= 0) return;
+  try {
+    const docRef = doc(db, 'scores', `${gameId}_${user.uid}`);
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data().score >= score) return; // 기존 점수가 높으면 무시
+    await setDoc(docRef, {
+      uid: user.uid,
+      name: user.displayName || '익명',
+      photo: user.photoURL || '',
+      game: gameId,
+      score: score,
+      updatedAt: serverTimestamp()
+    });
+    console.log(`[Score] ${gameId}: ${score} 저장 완료`);
+  } catch(e) { console.error('점수 저장 오류:', e); }
+};
+
+// 초기: 스켈레톤 로딩 상태 유지 (데이터 로드 시 자동 교체)
+
+// ===== 채팅 =====
+
+function formatChatTime(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return '방금';
+  if (diff < 3600000) return Math.floor(diff / 60000) + '분 전';
+  const isToday = d.toDateString() === now.toDateString();
+  const hm = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  if (isToday) return hm;
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate()-1);
+  if (d.toDateString() === yesterday.toDateString()) return '어제 ' + hm;
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
+}
+
+// XSS 방지
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+window.renderChatMessages = function(msgs) {
+  const container = document.getElementById('cbMessages');
+  if (!container) return;
+  const myUid = window.giylUser?.uid;
+
+  if (!msgs || msgs.length === 0) {
+    container.innerHTML = '<div class="cb-empty">아직 메시지가 없어요. 첫 메시지를 보내보세요! 💬</div>';
+    return;
+  }
+
+  let html = '';
+  msgs.forEach(m => {
+    const isMe = m.uid === myUid;
+    const photo = m.photo ? `<img class="cb-msg-avatar" src="${escapeHtml(m.photo)}" alt="" referrerpolicy="no-referrer">` : '<div class="cb-msg-avatar" style="background:var(--border);display:flex;align-items:center;justify-content:center;font-size:12px">👤</div>';
+    html += `<div class="cb-msg ${isMe ? 'me' : ''}">
+      ${photo}
+      <div class="cb-msg-body">
+        <div class="cb-msg-top">
+          <span class="cb-msg-name">${escapeHtml(m.name || '익명')}</span>
+          <span class="cb-msg-time">${formatChatTime(m.createdAt)}</span>
+        </div>
+        <div class="cb-msg-text">${escapeHtml(m.text || '')}</div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+  // 자동 스크롤 아래로
+  container.scrollTop = container.scrollHeight;
+};
+
+// 채팅 전송 이벤트
+document.getElementById('cbSend').addEventListener('click', async () => {
+  const input = document.getElementById('cbInput');
+  const text = input.value.trim();
+  if (!text || !window._sendChat) return;
+  input.value = '';
+  await window._sendChat(text);
+});
+
+document.getElementById('cbInput').addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const input = e.target;
+    const text = input.value.trim();
+    if (!text || !window._sendChat) return;
+    input.value = '';
+    await window._sendChat(text);
+  }
+});
+
+// 로그인 안 해도 리더보드 로드 시도 (모듈 스크립트 로드 후 실행)
+setTimeout(async function() {
+  if (window._loadAllRivals) {
+    try {
+      const all = await window._loadAllRivals();
+      window.renderRivalsBoard(all);
+    } catch(e) {}
+  }
+}, 1500);
 </script>
 </body>
 </html>

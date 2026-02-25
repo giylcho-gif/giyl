@@ -8,17 +8,22 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#0a0a14;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Segoe UI','맑은 고딕',sans-serif;overflow:hidden;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 #gc{position:relative;width:900px;height:640px;border-radius:12px;overflow:hidden;box-shadow:0 0 50px rgba(80,40,120,0.3);}
-@media(max-width:920px){#gc{width:100vw;height:auto;aspect-ratio:900/640;border-radius:0;}canvas{width:100%!important;height:100%!important;}}
+@media(max-width:1024px){
+  body{flex-direction:column;justify-content:flex-start;align-items:center;padding-top:0}
+  #gc{width:100vw!important;height:auto!important;max-height:50vh;aspect-ratio:900/640;border-radius:0!important;box-shadow:none!important}
+  canvas{width:100%!important;height:100%!important;}
+}
 canvas{display:block;}
-#mobileCtrl{display:none;position:fixed;bottom:0;left:0;right:0;height:140px;z-index:1000;touch-action:none;pointer-events:none}
+@media(min-width:1025px){#mobileCtrl{display:none!important}}
+#mobileCtrl{display:none;position:fixed;top:52vh;left:0;right:0;bottom:0;z-index:1000;touch-action:none;pointer-events:none}
 #mobileCtrl .mc-btn{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;color:#fff;border:2px solid rgba(255,213,79,0.4);background:rgba(20,10,40,0.75);backdrop-filter:blur(4px);touch-action:none;user-select:none}
 #mobileCtrl .mc-btn:active{background:rgba(255,213,79,0.3)}
-#dmc-left{width:56px;height:56px;left:16px;bottom:45px}
-#dmc-right{width:56px;height:56px;left:88px;bottom:45px}
-#dmc-up{width:56px;height:56px;left:52px;bottom:105px}
-#dmc-down{width:56px;height:56px;left:52px;bottom:-5px}
-#dmc-action{width:68px;height:68px;right:16px;bottom:40px;background:rgba(100,60,180,0.7);border-color:rgba(180,130,255,0.6);font-size:13px}
-#dmc-inv{width:52px;height:52px;right:96px;bottom:50px;font-size:12px}
+#dmc-left{width:56px;height:56px;left:16px;top:50px}
+#dmc-right{width:56px;height:56px;left:88px;top:50px}
+#dmc-up{width:56px;height:56px;left:52px;top:0}
+#dmc-down{width:56px;height:56px;left:52px;top:100px}
+#dmc-action{width:68px;height:68px;right:16px;top:25px;background:rgba(100,60,180,0.7);border-color:rgba(180,130,255,0.6);font-size:13px}
+#dmc-inv{width:52px;height:52px;right:96px;top:35px;font-size:12px}
 /* Title */
 #title{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(180deg,#0a0a1a 0%,#1a1030 40%,#2a1848 100%);z-index:100;}
 #title h1{font-size:52px;color:#FFD54F;text-shadow:0 0 20px rgba(255,213,79,0.5),2px 2px 4px #000;margin-bottom:6px;}
@@ -160,6 +165,15 @@ canvas{display:block;}
   <div class="v-info" id="vicLvl"></div>
   <button onclick="goTitle()">타이틀로</button>
 </div>
+</div>
+
+<div id="mobileCtrl">
+  <div class="mc-btn" id="dmc-left">◀</div>
+  <div class="mc-btn" id="dmc-right">▶</div>
+  <div class="mc-btn" id="dmc-up">▲</div>
+  <div class="mc-btn" id="dmc-down">▼</div>
+  <div class="mc-btn" id="dmc-action">확인</div>
+  <div class="mc-btn" id="dmc-inv">가방</div>
 </div>
 
 <script>
@@ -396,6 +410,8 @@ function endBattle(won){
   }else{
     state='gameover';
     sfxDeath();
+    // 점수 보고: 도달 층수
+    try { if(parent && parent.giylReportScore) parent.giylReportScore('dungeon', floor); } catch(e){}
     document.getElementById('gameover').style.display='flex';
     document.getElementById('goFloor').textContent=`도달 층수: ${floor}층`;
     document.getElementById('goLvl').textContent=`레벨: ${player.level}`;
@@ -1091,7 +1107,7 @@ if(hasSave())document.getElementById('btnLoad').disabled=false;
 gameLoop();
 
 // ===== 모바일 터치 컨트롤 =====
-if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+if(('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 1024){
   document.getElementById('mobileCtrl').style.display='block';
   function simKey(code){
     document.dispatchEvent(new KeyboardEvent('keydown',{code:code,bubbles:true}));
@@ -1104,14 +1120,5 @@ if('ontouchstart' in window || navigator.maxTouchPoints > 0){
   document.addEventListener('touchmove',e=>{e.preventDefault();},{passive:false});
 }
 </script>
-
-<div id="mobileCtrl">
-  <div class="mc-btn" id="dmc-left">◀</div>
-  <div class="mc-btn" id="dmc-right">▶</div>
-  <div class="mc-btn" id="dmc-up">▲</div>
-  <div class="mc-btn" id="dmc-down">▼</div>
-  <div class="mc-btn" id="dmc-action">확인</div>
-  <div class="mc-btn" id="dmc-inv">가방</div>
-</div>
 </body>
 </html>

@@ -911,6 +911,8 @@ function playerHit() {
       highScore = score;
       localStorage.setItem('spaceShooterHigh', highScore);
     }
+    // 점수 보고
+    try { if(parent && parent.giylReportScore) parent.giylReportScore('spaceshooter', score); } catch(e){}
   }
 }
 

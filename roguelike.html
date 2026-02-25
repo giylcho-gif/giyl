@@ -8,8 +8,12 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none; }
 canvas { display: block; image-rendering: pixelated; }
-@media(max-width:820px){canvas{max-width:100vw!important;max-height:65vh!important}}
-#rlJoy{display:none;position:fixed;bottom:15px;left:20px;width:120px;height:120px;z-index:1000;touch-action:none;pointer-events:auto;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(240,192,64,0.3)}
+@media(max-width:1024px){
+  body{flex-direction:column;justify-content:flex-start;align-items:center;padding-top:8px}
+  canvas{max-width:100vw!important;max-height:50vh!important;border-radius:0!important;box-shadow:none!important}
+}
+@media(min-width:1025px){#rlJoy{display:none!important}}
+#rlJoy{display:none;position:fixed;top:54vh;left:20px;width:120px;height:120px;z-index:1000;touch-action:none;pointer-events:auto;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(240,192,64,0.3)}
 #rlJoy .knob{position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(240,192,64,0.4);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
 #ui-overlay {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -76,6 +80,8 @@ canvas { display: block; image-rendering: pixelated; }
     <h2>일시정지</h2>
   </div>
 </div>
+
+<div id="rlJoy"><div class="knob"></div></div>
 
 <script>
 // ============================================================
@@ -1740,6 +1746,8 @@ function startGame() {
 function gameOver() {
   gameState = 'gameover';
   stopBGM();
+  // 점수 보고: 킬 수
+  try { if(parent && parent.giylReportScore) parent.giylReportScore('roguelike', kills); } catch(e){}
   const seconds = Math.floor(gameTime / 60);
   const min = Math.floor(seconds / 60);
   const sec = seconds % 60;
@@ -1775,14 +1783,14 @@ generateFloor();
 gameLoop();
 
 // ===== 모바일 조이스틱 =====
-if('ontouchstart' in window || navigator.maxTouchPoints > 0){
+if(('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 1024){
   const joy=document.getElementById('rlJoy');
   joy.style.display='block';
   const knob=joy.querySelector('.knob');
   let jId=null;
   // 캔버스 반응형
   const c=document.getElementById('game');
-  const fitC=()=>{const vw=window.innerWidth;if(vw<820){const s=Math.min(vw/800,(window.innerHeight*0.65)/600);c.style.width=Math.floor(800*s)+'px';c.style.height=Math.floor(600*s)+'px';}};
+  const fitC=()=>{const vw=window.innerWidth;if(vw<1024){const s=Math.min(vw/800,(window.innerHeight*0.50)/600);c.style.width=Math.floor(800*s)+'px';c.style.height=Math.floor(600*s)+'px';}};
   fitC();window.addEventListener('resize',fitC);
 
   joy.addEventListener('pointerdown',e=>{e.preventDefault();jId=e.pointerId;joy.setPointerCapture(e.pointerId);},{passive:false});
@@ -1806,7 +1814,5 @@ if('ontouchstart' in window || navigator.maxTouchPoints > 0){
   document.addEventListener('touchmove',e=>{if(e.target.closest('#rlJoy'))e.preventDefault();},{passive:false});
 }
 </script>
-
-<div id="rlJoy"><div class="knob"></div></div>
 </body>
 </html>

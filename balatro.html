@@ -754,6 +754,8 @@ function winRound() {
 function gameOver() {
   G.phase = 'gameover';
   hideGameUI();
+  // 점수 보고
+  try { if(parent && parent.giylReportScore) parent.giylReportScore('balatro', G.totalScore); } catch(e){}
   const el = document.getElementById('gameover');
   document.getElementById('go-score').textContent = `앤티 ${G.ante} - 총 점수: ${G.totalScore.toLocaleString()}`;
   el.style.display = 'flex';
@@ -763,6 +765,8 @@ function gameOver() {
 function victory() {
   G.phase = 'victory';
   hideGameUI();
+  // 점수 보고
+  try { if(parent && parent.giylReportScore) parent.giylReportScore('balatro', G.totalScore); } catch(e){}
   const el = document.getElementById('victory');
   document.getElementById('vic-score').textContent = `최종 점수: ${G.totalScore.toLocaleString()}`;
   el.style.display = 'flex';

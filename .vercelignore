@@ -1,0 +1,6 @@
+__MACOSX
+rivals-server
+node_modules
+.git
+*.ps1
+create_icons_v2.ps1
