@@ -2794,46 +2794,47 @@ const gltfLoader = new THREE.GLTFLoader();
 
 // 무기별 3D 모델 설정
 const weaponModelConfigs = [
-    { // AK-47 (배럴이 X축 방향 → +PI/2 Y회전으로 -Z 방향)
+    { // AK-47 (배럴이 LOCAL X축, rotOffset PI/2로 화면 방향 정렬)
+        // 로컬 좌표: X=배럴방향[-0.3~+0.3], Y=높이[-0.09~+0.09], Z=두께[-0.012~+0.012]
         path: 'models/ak47.glb',
         scale: 0.30,
         rotOffset: new THREE.Euler(0, Math.PI/2, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
         hands: {
-            left:  { pos: [-0.008, 0.010, -0.14], rot: [0.1, 0, 0.15] },
-            right: { pos: [0.008, -0.045, 0.05], rot: [0.3, 0, -0.10] }
+            left:  { pos: [0.10, -0.01, 0], rot: [0, 0, 0] },
+            right: { pos: [-0.07, -0.04, 0], rot: [0.15, 0, 0] }
         }
     },
-    { // 특수소총 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
+    { // 특수소총 (배럴이 LOCAL Z축, rotOffset PI로 화면 방향 정렬)
         path: 'models/gun.glb',
         scale: 0.007,
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
         hands: {
-            left:  { pos: [-0.008, 0.010, -0.12], rot: [0.1, 0, 0.15] },
-            right: { pos: [0.008, -0.045, 0.05], rot: [0.3, 0, -0.10] }
+            left:  { pos: [0, -0.01, -0.10], rot: [0, Math.PI/2, 0] },
+            right: { pos: [0, -0.04, 0.05], rot: [0.15, Math.PI/2, 0] }
         }
     },
-    { // 스나이퍼 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
+    { // 스나이퍼 (배럴이 LOCAL Z축, rotOffset PI로 화면 방향 정렬)
         path: 'models/sniper.glb',
         scale: 0.006,
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.35),
         hands: {
-            left:  { pos: [-0.008, 0.010, -0.15], rot: [0.1, 0, 0.15] },
-            right: { pos: [0.008, -0.045, 0.05], rot: [0.3, 0, -0.10] }
+            left:  { pos: [0, -0.01, -0.13], rot: [0, Math.PI/2, 0] },
+            right: { pos: [0, -0.04, 0.05], rot: [0.15, Math.PI/2, 0] }
         }
     }
 ];
 let weaponModelsLoaded = false;
 
-// FPS 프리미티브 손 시스템 - CS:GO 스타일 그립
-const _gloveMat = new THREE.MeshStandardMaterial({color: 0x2d2d2d, roughness: 0.82, metalness: 0.05});
-const _gloveLightMat = new THREE.MeshStandardMaterial({color: 0x3a3a3a, roughness: 0.85, metalness: 0.03});
-const _skinMat = new THREE.MeshStandardMaterial({color: 0xc49272, roughness: 0.7, metalness: 0.0});
+// FPS 프리미티브 손 시스템 - CS:GO 스타일 (레퍼런스 기반)
+const _gloveMat = new THREE.MeshStandardMaterial({color: 0x1e1e1e, roughness: 0.80, metalness: 0.05});
+const _gloveLightMat = new THREE.MeshStandardMaterial({color: 0x333333, roughness: 0.85, metalness: 0.03});
+const _skinMat = new THREE.MeshStandardMaterial({color: 0xd4a574, roughness: 0.65, metalness: 0.0});
 const _sleeveMat = new THREE.MeshStandardMaterial({color: 0x3d4a2f, roughness: 0.9, metalness: 0.0});
 const _sleeveDarkMat = new THREE.MeshStandardMaterial({color: 0x2e3823, roughness: 0.95, metalness: 0.0});
 
@@ -2841,83 +2842,86 @@ function buildGrippingHand(isLeft) {
     const hand = new THREE.Group();
     const s = isLeft ? 1 : -1;
 
-    // === 팔뚝 (긴 슬리브, 화면 아래로 충분히 뻗음) ===
+    // === 피부색 팔뚝 (레퍼런스처럼 잘 보이게) ===
     const forearm = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.026, 0.036, 0.30, 8),
-        _sleeveMat
-    );
-    forearm.position.set(s * 0.012, -0.18, 0.06);
-    forearm.rotation.set(0.35, 0, s * 0.30);
-    hand.add(forearm);
-
-    // 슬리브 끝단 (커프스 - 약간 더 두꺼운 링)
-    const cuff = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.030, 0.028, 0.02, 8),
-        _sleeveDarkMat
-    );
-    cuff.position.set(s * 0.003, -0.035, 0.025);
-    hand.add(cuff);
-
-    // === 손목 (피부 노출) ===
-    const wrist = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.022, 0.024, 0.025, 8),
+        new THREE.CylinderGeometry(0.030, 0.040, 0.28, 8),
         _skinMat
     );
-    wrist.position.set(0, -0.020, 0.012);
+    forearm.position.set(0, -0.18, s * -0.06);
+    forearm.rotation.set(0.12, 0, s * 0.35);
+    hand.add(forearm);
+
+    // 올리브색 슬리브 (팔뚝 끝)
+    const sleeve = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.042, 0.055, 0.16, 8),
+        _sleeveMat
+    );
+    sleeve.position.set(0, -0.30, s * -0.12);
+    sleeve.rotation.set(0.12, 0, s * 0.35);
+    hand.add(sleeve);
+
+    // 커프스
+    const cuff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.044, 0.042, 0.012, 8),
+        _sleeveDarkMat
+    );
+    cuff.position.set(0, -0.22, s * -0.08);
+    cuff.rotation.set(0.12, 0, s * 0.35);
+    hand.add(cuff);
+
+    // === 손목 (피부→장갑 전환) ===
+    const wrist = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.026, 0.030, 0.035, 8),
+        _skinMat
+    );
+    wrist.position.set(0, -0.055, s * -0.015);
     hand.add(wrist);
 
-    // === 손바닥/손등 (두꺼운 장갑) ===
+    // === 장갑 손바닥 (배럴 아래) ===
     const palm = new THREE.Mesh(
-        new THREE.BoxGeometry(0.054, 0.028, 0.058),
+        new THREE.BoxGeometry(0.08, 0.032, 0.07),
         _gloveMat
     );
-    palm.position.set(0, -0.002, 0);
+    palm.position.set(0, -0.022, 0);
     hand.add(palm);
 
-    // === 4개 손가락 - 무기 위를 감싸며 구부림 ===
-    for (let i = 0; i < 4; i++) {
-        const fx = (i - 1.5) * 0.012;
+    // === 손가락 (배럴 위를 감싸는 솔리드 바) ===
+    const fingersBar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.075, 0.020, 0.050),
+        _gloveMat
+    );
+    fingersBar.position.set(0, 0.030, 0);
+    hand.add(fingersBar);
 
-        // 손가락 마디 1 (손등 위에서 시작)
-        const seg1 = new THREE.Mesh(
-            new THREE.BoxGeometry(0.011, 0.016, 0.022),
-            _gloveLightMat
-        );
-        seg1.position.set(fx, 0.020, -0.016);
-        hand.add(seg1);
-
-        // 손가락 마디 2 (위로 올라가서 앞으로)
-        const seg2 = new THREE.Mesh(
-            new THREE.BoxGeometry(0.010, 0.014, 0.022),
-            _gloveMat
-        );
-        seg2.position.set(fx, 0.030, 0.002);
-        hand.add(seg2);
-
-        // 손가락 끝 (아래로 구부림 - 무기 반대쪽)
-        const seg3 = new THREE.Mesh(
-            new THREE.BoxGeometry(0.009, 0.014, 0.016),
-            _gloveMat
-        );
-        seg3.position.set(fx, 0.024, 0.020);
-        hand.add(seg3);
-    }
-
-    // === 엄지 (측면) ===
-    const thumbBase = new THREE.Mesh(
-        new THREE.BoxGeometry(0.016, 0.016, 0.032),
+    // 너클 릿지 (관절 돌출)
+    const knuckles = new THREE.Mesh(
+        new THREE.BoxGeometry(0.073, 0.012, 0.040),
         _gloveLightMat
     );
-    thumbBase.position.set(s * 0.032, 0.005, -0.005);
-    thumbBase.rotation.set(0, 0, s * -0.25);
+    knuckles.position.set(0, 0.044, 0);
+    hand.add(knuckles);
+
+    // 손가락 끝 (안쪽으로 구부림)
+    const fingerTips = new THREE.Mesh(
+        new THREE.BoxGeometry(0.068, 0.024, 0.016),
+        _gloveMat
+    );
+    fingerTips.position.set(0, 0.024, s * 0.030);
+    hand.add(fingerTips);
+
+    // === 엄지 (측면에서 잡기) ===
+    const thumbBase = new THREE.Mesh(
+        new THREE.BoxGeometry(0.020, 0.020, 0.040),
+        _gloveMat
+    );
+    thumbBase.position.set(0, 0.000, s * -0.045);
     hand.add(thumbBase);
 
     const thumbTip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.013, 0.013, 0.020),
-        _gloveMat
+        new THREE.BoxGeometry(0.016, 0.016, 0.028),
+        _gloveLightMat
     );
-    thumbTip.position.set(s * 0.038, 0.014, -0.016);
-    thumbTip.rotation.set(0, 0, s * -0.15);
+    thumbTip.position.set(0.012, 0.008, s * -0.056);
     hand.add(thumbTip);
 
     return hand;
