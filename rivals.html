@@ -2985,8 +2985,8 @@ function initWeapon3DModels() {
             const wrapper = new THREE.Group();
             wrapper.add(model);
 
-            // FPS 손 부착 (프리미티브)
-            attachHandsToWeapon(wrapper, idx);
+            // FPS 손 비활성화 (프리미티브 박스 제거)
+            // attachHandsToWeapon(wrapper, idx);
 
             wrapper.userData.idlePos = cfg.idlePos.clone();
             wrapper.userData.adsPos = cfg.adsPos.clone();
