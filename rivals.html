@@ -2801,8 +2801,7 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
         arms: {
-            left:  { pos: [0.10, 0.0, 0], rot: [0.35, 0, 0] },
-            right: { pos: [-0.07, -0.03, 0], rot: [-0.30, 0, 0] }
+            left:  { pos: [0.10, 0.0, 0], rot: [0.35, 0, 0] }
         }
     },
     { // 특수소총 (배럴 LOCAL Z축)
@@ -2812,8 +2811,7 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
         arms: {
-            left:  { pos: [0, 0.0, -0.10], rot: [0, 0, -0.35] },
-            right: { pos: [0, -0.03, 0.05], rot: [0, 0, 0.30] }
+            left:  { pos: [0, 0.0, -0.10], rot: [0, 0, -0.35] }
         }
     },
     { // 스나이퍼 (배럴 LOCAL Z축)
@@ -2823,16 +2821,15 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.25, -0.14, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.35),
         arms: {
-            left:  { pos: [0, 0.0, -0.13], rot: [0, 0, -0.35] },
-            right: { pos: [0, -0.03, 0.05], rot: [0, 0, 0.30] }
+            left:  { pos: [0, 0.0, -0.13], rot: [0, 0, -0.35] }
         }
     }
 ];
 let weaponModelsLoaded = false;
 
-// 로블록스 라이벌 스타일 블록 팔 (손 없이 팔만)
+// 로블록스 라이벌 스타일 블록 팔 (왼팔만)
 const _skinMat = new THREE.MeshStandardMaterial({color: 0xd4a574, roughness: 0.6, metalness: 0.0});
-const _sleeveMat = new THREE.MeshStandardMaterial({color: 0x3d4a2f, roughness: 0.8, metalness: 0.0});
+const _sleeveMat = new THREE.MeshStandardMaterial({color: 0x2a2a2a, roughness: 0.8, metalness: 0.0});
 
 function buildRobloxArm() {
     const arm = new THREE.Group();
@@ -2845,12 +2842,12 @@ function buildRobloxArm() {
     hand.position.set(0, -0.015, 0);
     arm.add(hand);
 
-    // 슬리브 블록 (아래쪽, 길게)
+    // 다크 슬리브 블록 (아래쪽, 길게)
     const sleeve = new THREE.Mesh(
-        new THREE.BoxGeometry(0.058, 0.28, 0.058),
+        new THREE.BoxGeometry(0.058, 0.32, 0.058),
         _sleeveMat
     );
-    sleeve.position.set(0, -0.19, 0);
+    sleeve.position.set(0, -0.21, 0);
     arm.add(sleeve);
 
     return arm;
@@ -2862,19 +2859,14 @@ function attachArmsToWeapon(wrapper, wpnIdx) {
     if (!cfg || !cfg.arms) return;
     wrapper.userData.armsAttached = true;
 
+    // 왼팔만 부착
     const leftArm = buildRobloxArm();
     leftArm.position.set(cfg.arms.left.pos[0], cfg.arms.left.pos[1], cfg.arms.left.pos[2]);
     leftArm.rotation.set(cfg.arms.left.rot[0], cfg.arms.left.rot[1], cfg.arms.left.rot[2]);
     wrapper.add(leftArm);
 
-    const rightArm = buildRobloxArm();
-    rightArm.position.set(cfg.arms.right.pos[0], cfg.arms.right.pos[1], cfg.arms.right.pos[2]);
-    rightArm.rotation.set(cfg.arms.right.rot[0], cfg.arms.right.rot[1], cfg.arms.right.rot[2]);
-    wrapper.add(rightArm);
-
     wrapper.userData.leftHand = leftArm;
-    wrapper.userData.rightHand = rightArm;
-    console.log(`[3D] 로블록스 팔 부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
+    console.log(`[3D] 로블록스 왼팔 부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
 }
 
 // GLB 무기 모델 로드
