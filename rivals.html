@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>라이벌 FPS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -74,7 +76,10 @@ canvas {
 </style>
 </head>
 <body>
+<div id="canvasContainer" style="position:relative;display:inline-flex;">
 <canvas id="c"></canvas>
+<canvas id="weaponCanvas" style="position:absolute;top:0;left:0;pointer-events:none;border-radius:8px;"></canvas>
+</div>
 <div id="fpsControls">
   <!-- 이동 조이스틱 (좌) -->
   <div class="fps-joy" id="fps-joy-left"><div class="fps-joy-knob"></div></div>
@@ -103,6 +108,51 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const W = 960, H = 640;
 canvas.width = W; canvas.height = H;
+
+// ====== THREE.JS 3D 무기 시스템 ======
+const weaponCanvas = document.getElementById('weaponCanvas');
+weaponCanvas.width = W; weaponCanvas.height = H;
+weaponCanvas.style.width = canvas.style.width;
+weaponCanvas.style.height = canvas.style.height;
+
+const weaponRenderer = new THREE.WebGLRenderer({ canvas: weaponCanvas, alpha: true, antialias: true });
+weaponRenderer.setSize(W, H);
+weaponRenderer.setClearColor(0x000000, 0);
+weaponRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const weaponScene = new THREE.Scene();
+const weaponCamera = new THREE.PerspectiveCamera(70, W / H, 0.01, 10);
+weaponCamera.position.set(0, 0, 0);
+
+// 3점 조명 (환경맵 없이 밝게)
+const wpnKeyLight = new THREE.DirectionalLight(0xffffff, 1.8);
+wpnKeyLight.position.set(-1, 2, 1);
+weaponScene.add(wpnKeyLight);
+const wpnFillLight = new THREE.DirectionalLight(0xaabbdd, 0.8);
+wpnFillLight.position.set(1, 0, 0.5);
+weaponScene.add(wpnFillLight);
+const wpnRimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+wpnRimLight.position.set(0, 1, -1);
+weaponScene.add(wpnRimLight);
+const wpnAmbient = new THREE.AmbientLight(0x606070, 1.2);
+weaponScene.add(wpnAmbient);
+
+// 머즐 플래시 라이트
+const muzzleFlashLight = new THREE.PointLight(0xffaa44, 0, 2);
+weaponScene.add(muzzleFlashLight);
+
+// 무기 모델 저장소
+const weaponModels3D = [];
+let currentWeapon3D = null;
+
+// 오버레이 캔버스 크기 동기화
+const syncWeaponCanvas = () => {
+    const r = canvas.getBoundingClientRect();
+    weaponCanvas.style.width = r.width + 'px';
+    weaponCanvas.style.height = r.height + 'px';
+};
+window.addEventListener('resize', syncWeaponCanvas);
+setTimeout(syncWeaponCanvas, 100);
 
 // ====== SOUND SYSTEM (미리 캐시된 버퍼 방식) ======
 let audioCtx = null;
@@ -710,21 +760,16 @@ const player = {
 
 // ====== WEAPONS ======
 const weapons = [
-    { name:'AK-47', damage:18, fireRate:6, reloadSpeed:90, spread:0.015, auto:true, range:300, color:'#ff6b35', ammoName:'7.62mm', icon:'▄█▀', sound:'rifle' },
-    { name:'샷건', damage:12, fireRate:30, reloadSpeed:60, spread:0.08, auto:false, range:100, color:'#ffaa00', pellets:8, ammoName:'12게이지', icon:'▄██', sound:'shotgun' },
-    { name:'Barrett M82', damage:95, fireRate:50, reloadSpeed:120, spread:0.001, auto:false, range:500, color:'#00ccff', ammoName:'.50 BMG', icon:'━━▄', sound:'sniper', scope:true },
-    { name:'로켓런처', damage:80, fireRate:60, reloadSpeed:150, spread:0.005, auto:false, range:400, color:'#ff3333', ammoName:'로켓', icon:'◄━━', sound:'rocket', explosive:true },
-    { name:'권총', damage:22, fireRate:10, reloadSpeed:50, spread:0.02, auto:false, range:200, color:'#cccccc', ammoName:'9mm', icon:'▄▀', sound:'pistol' },
-    { name:'낫', damage:65, fireRate:20, reloadSpeed:0, spread:0, auto:false, range:30, color:'#cc44ff', ammoName:'', icon:'⌒', sound:'melee', melee:true },
-    { name:'수류탄', damage:90, fireRate:40, reloadSpeed:0, spread:0.01, auto:false, range:300, color:'#44cc44', ammoName:'수류탄', icon:'●', sound:'grenade', explosive:true, grenade:true }
+    { name:'AK-47', damage:18, fireRate:6, reloadSpeed:90, spread:0.015, auto:true, range:300, color:'#ff6b35', ammoName:'7.62mm', icon:'▄█▀', sound:'rifle', model:'models/ak47.glb' },
+    { name:'특수소총', damage:25, fireRate:8, reloadSpeed:75, spread:0.012, auto:true, range:350, color:'#00ccff', ammoName:'5.56mm', icon:'━▄█', sound:'rifle', model:'models/gun.glb' },
+    { name:'스나이퍼', damage:90, fireRate:50, reloadSpeed:120, spread:0.002, auto:false, range:500, color:'#44ff88', ammoName:'.308', icon:'━━▄', sound:'sniper', scope:true, model:'models/sniper.glb' }
 ];
 
 // ====== CLASSES ======
 const classes = [
-    { name:'돌격병', desc:'빠른 이동 + 돌격소총', weapon:0, hp:100, armor:0, speed:2.5, color:'#ff6b35', ability:'대시', abilityCooldown:180 },
-    { name:'탱커', desc:'높은 체력 + 샷건', weapon:1, hp:150, armor:50, speed:1.8, color:'#44aa44', ability:'보호막', abilityCooldown:300 },
-    { name:'저격수', desc:'스나이퍼 + 스코프', weapon:2, hp:80, armor:0, speed:2.2, color:'#00ccff', ability:'투명화', abilityCooldown:360 },
-    { name:'폭파병', desc:'로켓런처 + 폭발', weapon:3, hp:100, armor:25, speed:2.0, color:'#ff3333', ability:'지뢰', abilityCooldown:240 }
+    { name:'돌격병', desc:'AK-47 + 빠른 이동', weapon:0, hp:100, armor:0, speed:2.5, color:'#ff6b35', ability:'대시', abilityCooldown:180 },
+    { name:'특수부대', desc:'특수소총 + 높은 화력', weapon:1, hp:120, armor:25, speed:2.2, color:'#00ccff', ability:'보호막', abilityCooldown:240 },
+    { name:'저격수', desc:'스나이퍼 + 스코프', weapon:2, hp:80, armor:0, speed:2.0, color:'#44ff88', ability:'투명화', abilityCooldown:360 }
 ];
 
 // ====== MAP ======
@@ -924,7 +969,6 @@ document.addEventListener('keydown', e => {
         if(e.code === 'Digit1') selectClass(0);
         if(e.code === 'Digit2') selectClass(1);
         if(e.code === 'Digit3') selectClass(2);
-        if(e.code === 'Digit4') selectClass(3);
     }
     // 스킨 보상 팝업 닫기
     if(pendingSkinReward) { pendingSkinReward = null; return; }
@@ -934,10 +978,7 @@ document.addEventListener('keydown', e => {
         if(e.code === 'KeyR' && player.reloadTime <= 0 && !weapons[player.weapon].melee) reload();
         if(e.code === 'Tab') { e.preventDefault(); gameState = 'scoreboard'; return; }
         // 무기 전환 1~4
-        if(e.code === 'Digit1') { player.currentSlot = 0; player.weapon = player.weaponSlots[0]; player.scope = false; player.reloadTime = 0; }
-        if(e.code === 'Digit2') { player.currentSlot = 1; player.weapon = player.weaponSlots[1]; player.scope = false; player.reloadTime = 0; }
-        if(e.code === 'Digit3') { player.currentSlot = 2; player.weapon = player.weaponSlots[2]; player.scope = false; player.reloadTime = 0; }
-        if(e.code === 'Digit4') { player.currentSlot = 3; player.weapon = player.weaponSlots[3]; player.scope = false; player.reloadTime = 0; }
+        if(e.code === 'Digit1' && player.weaponSlots[0] !== undefined) { player.currentSlot = 0; player.weapon = player.weaponSlots[0]; player.scope = false; player.reloadTime = 0; }
         // F키 빠른 근접공격 (낫)
         if(e.code === 'KeyF' && player.meleeCooldown <= 0 && !player.meleeActive) {
             player.meleeActive = true;
@@ -1143,15 +1184,15 @@ function selectClass(idx) {
     startSessionTimer();
     player.selectedClass = idx;
     const cls = classes[idx];
-    player.weaponSlots = [cls.weapon, 4, 5, 6]; // 주무기, 권총, 낫, 수류탄
+    player.weaponSlots = [cls.weapon]; // 주무기만
     player.currentSlot = 0;
     player.weapon = player.weaponSlots[0];
     player.maxHp = cls.hp;
     player.hp = cls.hp;
     player.armor = cls.armor;
     player.speed = cls.speed;
-    player.ammo = [30, 8, 5, 1, 12, 1, 3];
-    player.maxAmmo = [30, 8, 5, 1, 12, 1, 3];
+    player.ammo = [30, 30, 5];
+    player.maxAmmo = [30, 30, 5];
 
     if(isOnline || networkState === 'lobby' || networkState === 'waiting' || ws) {
         // Online: send class selection and wait for start_game
@@ -1240,7 +1281,7 @@ function respawn() {
     player.armor = classes[player.selectedClass].armor;
     player.currentSlot = 0;
     player.weapon = player.weaponSlots[0];
-    player.ammo = [30, 8, 5, 1, 12, 1, 3];
+    player.ammo = [30, 30, 5];
     player.reloadTime = 0;
     player.shootCooldown = 0;
     player.killStreak = 0;
@@ -2373,7 +2414,8 @@ function drawHUD() {
         const isActive = player.currentSlot === i;
         ctx.fillStyle = isActive ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.4)';
         ctx.fillRect(sx, sy, slotW, slotH);
-        ctx.strokeStyle = isActive ? weapons[player.weaponSlots[i]].color : 'rgba(255,255,255,0.2)';
+        const slotWpn = weapons[player.weaponSlots[i]];
+        ctx.strokeStyle = isActive && slotWpn ? slotWpn.color : 'rgba(255,255,255,0.2)';
         ctx.lineWidth = isActive ? 2 : 1;
         ctx.strokeRect(sx, sy, slotW, slotH);
         ctx.font = isActive ? 'bold 11px Segoe UI' : '10px Segoe UI';
@@ -2687,8 +2729,9 @@ function drawHUD() {
         ctx.fillRect(0,0,W,H);
     }
 
-    // Weapon model
-    drawWeaponModel();
+    // Weapon model (3D)
+    renderWeapon3D();
+    drawMeleeEffect2D();
 
     // Dash cooldown (돌격병)
     if(player.selectedClass === 0) {
@@ -2746,998 +2789,296 @@ function getSkinPalette(skin) {
     };
 }
 
-function drawWeaponModel() {
-    const w = weapons[player.weapon];
-    const t = Date.now();
-    const isMoving = keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD'];
-    const bobX = isMoving ? Math.sin(t*0.008) * 5 : Math.sin(t*0.002) * 1;
-    const bobY = isMoving ? Math.abs(Math.cos(t*0.008)) * 6 : Math.cos(t*0.003) * 1;
-    const recoilKick = player.shootCooldown > 0 ? player.shootCooldown * 1.5 : 0;
+// ====== 3D 무기 모델 시스템 (GLTFLoader) ======
+const gltfLoader = new THREE.GLTFLoader();
+
+// 무기별 3D 모델 설정
+const weaponModelConfigs = [
+    { // AK-47 (배럴이 X축 방향 → +PI/2 Y회전으로 -Z 방향)
+        path: 'models/ak47.glb',
+        scale: 0.30,
+        rotOffset: new THREE.Euler(0, Math.PI/2, 0),
+        idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
+        adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
+        // 왼팔=핸드가드(앞쪽), 오른팔=피스톨그립(뒤쪽)
+        leftArm:  { pos: [ 0.01, -0.06, -0.12], angle: 0.20 },
+        rightArm: { pos: [ 0.01, -0.06,  0.10], angle: -0.35 }
+    },
+    { // 특수소총 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
+        path: 'models/gun.glb',
+        scale: 0.007,
+        rotOffset: new THREE.Euler(0, Math.PI, 0),
+        idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
+        adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
+        leftArm:  { pos: [ 0.01, -0.06, -0.10], angle: 0.20 },
+        rightArm: { pos: [ 0.01, -0.06,  0.08], angle: -0.35 }
+    },
+    { // 스나이퍼 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
+        path: 'models/sniper.glb',
+        scale: 0.006,
+        rotOffset: new THREE.Euler(0, Math.PI, 0),
+        idlePos: new THREE.Vector3(0.25, -0.14, -0.38),
+        adsPos: new THREE.Vector3(0.0, -0.10, -0.35),
+        leftArm:  { pos: [ 0.01, -0.06, -0.15], angle: 0.20 },
+        rightArm: { pos: [ 0.01, -0.06,  0.10], angle: -0.35 }
+    }
+];
+let weaponModelsLoaded = false;
+
+// FPS 팔 프리미티브 시스템
+const armSkinMat = new THREE.MeshStandardMaterial({ color: 0xc9956b, roughness: 0.8, metalness: 0.0 });
+const armSleeveMat = new THREE.MeshStandardMaterial({ color: 0x3d4a2e, roughness: 0.9, metalness: 0.0 });
+const armGloveMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.05 });
+const gloveDetailMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.5, metalness: 0.05 });
+
+// 팔 하나 생성 - 부드러운 C-그립 장갑 (개별 손가락 없음)
+function buildFPSArm(isLeft) {
+    const group = new THREE.Group();
+    const side = isLeft ? 1 : -1;
+
+    // 소매 (팔뚝)
+    const sleeveGeo = new THREE.CylinderGeometry(0.032, 0.038, 0.28, 8);
+    const sleeve = new THREE.Mesh(sleeveGeo, armSleeveMat);
+    sleeve.position.set(0, -0.14, 0);
+    group.add(sleeve);
+
+    // 소매 끝단
+    const cuffGeo = new THREE.CylinderGeometry(0.036, 0.034, 0.025, 8);
+    const cuff = new THREE.Mesh(cuffGeo, armSleeveMat);
+    cuff.position.set(0, 0.01, 0);
+    group.add(cuff);
+
+    // 손목 (피부)
+    const wristGeo = new THREE.CylinderGeometry(0.028, 0.030, 0.03, 8);
+    const wrist = new THREE.Mesh(wristGeo, armSkinMat);
+    wrist.position.set(0, 0.035, 0);
+    group.add(wrist);
+
+    // 핸드 그룹 - C-그립
+    const handGroup = new THREE.Group();
+    handGroup.position.set(0, 0.05, 0);
+    handGroup.rotation.x = -0.95;
+
+    // 손등 (위쪽 평면) - 총 위에 올라가는 부분
+    const backGeo = new THREE.BoxGeometry(0.055, 0.06, 0.018);
+    const back = new THREE.Mesh(backGeo, armGloveMat);
+    back.position.set(0, 0.015, 0.015);
+    handGroup.add(back);
+
+    // 손등 디테일 (너클 라인)
+    const knuckleGeo = new THREE.BoxGeometry(0.053, 0.008, 0.020);
+    const knuckle = new THREE.Mesh(knuckleGeo, gloveDetailMat);
+    knuckle.position.set(0, 0.04, 0.015);
+    handGroup.add(knuckle);
+
+    // C-그립: 아래쪽을 감싸는 커브 (여러 세그먼트로 부드러운 곡선)
+    const gripSegments = 5;
+    const gripRadius = 0.022;
+    const gripWidth = 0.050;
+    for (let i = 0; i < gripSegments; i++) {
+        // 반원 아래쪽 (PI ~ 2*PI) 범위를 커버
+        const angle = Math.PI + (i / (gripSegments - 1)) * Math.PI;
+        const y = Math.cos(angle) * gripRadius + 0.015;
+        const z = Math.sin(angle) * gripRadius + 0.015;
+        const segGeo = new THREE.BoxGeometry(gripWidth, 0.06 / gripSegments * 1.3, 0.016);
+        const seg = new THREE.Mesh(segGeo, armGloveMat);
+        seg.position.set(0, y, z);
+        // 세그먼트를 곡선 방향으로 회전
+        seg.rotation.x = angle - Math.PI * 1.5;
+        handGroup.add(seg);
+    }
+
+    // 손가락 끝 부분 (앞쪽 덮개) - 총을 감싸는 앞면
+    const tipGeo = new THREE.BoxGeometry(0.048, 0.018, 0.030);
+    const tip = new THREE.Mesh(tipGeo, gloveDetailMat);
+    tip.position.set(0, 0.04, -0.005);
+    handGroup.add(tip);
+
+    // 엄지 - 옆에 붙은 간단한 형태
+    const thumbGeo = new THREE.BoxGeometry(0.016, 0.035, 0.018);
+    const thumb = new THREE.Mesh(thumbGeo, armGloveMat);
+    thumb.position.set(side * 0.033, 0.01, 0.018);
+    thumb.rotation.z = side * 0.3;
+    handGroup.add(thumb);
+
+    const thumbTipGeo = new THREE.BoxGeometry(0.014, 0.020, 0.016);
+    const thumbTip = new THREE.Mesh(thumbTipGeo, gloveDetailMat);
+    thumbTip.position.set(side * 0.038, 0.035, 0.018);
+    thumbTip.rotation.z = side * 0.4;
+    handGroup.add(thumbTip);
+
+    group.add(handGroup);
+    return group;
+}
+
+function attachArmsToWeapon(wrapper, wpnIdx) {
+    if (wrapper.userData.armsAttached) return;
+    const cfg = weaponModelConfigs[wpnIdx];
+    if (!cfg) return;
+
+    function addArm(armCfg, isLeft) {
+        const arm = buildFPSArm(isLeft);
+        // X: 앞으로 기울기, Z: 좌우 기울기
+        arm.rotation.set(-0.6, 0, armCfg.angle || 0);
+        arm.position.set(armCfg.pos[0], armCfg.pos[1], armCfg.pos[2]);
+        wrapper.add(arm);
+        return arm;
+    }
+
+    if (cfg.leftArm) wrapper.userData.leftArm = addArm(cfg.leftArm, true);
+    if (cfg.rightArm) wrapper.userData.rightArm = addArm(cfg.rightArm, false);
+
+    wrapper.userData.armsAttached = true;
+    console.log(`[3D] FPS Arms 부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
+}
+
+// GLB 무기 모델 로드
+function initWeapon3DModels() {
+    if (weaponModelsLoaded) return;
+    weaponModelsLoaded = true;
+
+    weaponModelConfigs.forEach((cfg, idx) => {
+        gltfLoader.load(cfg.path, (gltf) => {
+            const model = gltf.scene;
+            model.scale.setScalar(cfg.scale);
+
+            // Sketchfab 모델 회전 정규화 (-PI/2, 0, 0 = Y-up 표준)
+            model.traverse(child => {
+                if (child.name === 'Sketchfab_model') {
+                    child.rotation.set(-Math.PI/2, 0, 0);
+                }
+            });
+
+            // 재질 최적화: 환경맵 없이도 잘 보이게
+            model.traverse(child => {
+                if (child.isMesh && child.material) {
+                    child.material.metalness = Math.min(child.material.metalness || 0, 0.3);
+                    child.material.roughness = Math.max(child.material.roughness || 1, 0.5);
+                    child.material.needsUpdate = true;
+                }
+            });
+
+            // 바운딩 박스로 모델 중심 맞추기
+            model.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.sub(center);
+
+            const wrapper = new THREE.Group();
+            wrapper.add(model);
+
+            // FPS 팔 부착
+            attachArmsToWeapon(wrapper, idx);
+
+            wrapper.userData.idlePos = cfg.idlePos.clone();
+            wrapper.userData.adsPos = cfg.adsPos.clone();
+            wrapper.userData.config = cfg;
+
+            weaponModels3D[idx] = wrapper;
+            console.log(`[3D] 무기 모델 로드 완료: ${weapons[idx]?.name || idx} (${cfg.path})`);
+        },
+        undefined,
+        (err) => console.error(`[3D] 모델 로드 실패: ${cfg.path}`, err));
+    });
+}
+
+// 스킨 적용 (GLB 모델)
+function applyWeaponSkin3D(wpnIdx) {
+    const skin = getSkinForWeapon(wpnIdx);
+    const pal = getSkinPalette(skin);
+    const model = weaponModels3D[wpnIdx];
+    if (!model || !pal) return;
+    model.traverse(child => {
+        if (child.isMesh && child.material) {
+            // GLB 모델은 기본 색상 유지, 스킨 틴트 적용
+            const origColor = child.material.color.clone();
+            const skinTint = new THREE.Color(pal.body || '#555');
+            child.material.color.copy(origColor).lerp(skinTint, 0.3);
+        }
+    });
+}
+
+
+// ====== 3D 무기 렌더링 ======
+function renderWeapon3D() {
+    if (gameState !== 'playing') {
+        weaponRenderer.clear();
+        return;
+    }
+
+    // 모델 로드 시작
+    if (!weaponModelsLoaded) initWeapon3DModels();
 
     const wpnIdx = player.weapon;
-    const _skin = getSkinForWeapon(wpnIdx);
-    const pal = getSkinPalette(_skin);
+    if (wpnIdx >= weapons.length) { weaponRenderer.clear(); return; }
 
-    // 스나이퍼 스코프 모드에서는 총 숨김
-    if(player.scope && wpnIdx === 2) return;
-
-    // 원래 스타일: 화면 우하단, 총구가 왼쪽(앞)을 향함
-    const adsLerp = player.adsAmount;
-
-    // 위치: idle(우하단) -> ADS(중앙)
-    const baseX = (W * 0.62 + bobX) * (1-adsLerp) + (W * 0.50) * adsLerp;
-    const baseY = (H * 0.72 + bobY) * (1-adsLerp) + (H * 0.60 + bobY*0.3) * adsLerp;
-
-    ctx.save();
-    ctx.translate(baseX, baseY);
-    ctx.rotate(-0.15);
-
-    // 3D 면 헬퍼
-    function box3D(x, y, bw, bh, depth, face, top, side) {
-        const sx = depth * 0.35, sy = -depth * 0.5;
-        // 윗면
-        if(top) {
-            ctx.fillStyle = top;
-            ctx.beginPath();
-            ctx.moveTo(x, y); ctx.lineTo(x+sx, y+sy);
-            ctx.lineTo(x+bw+sx, y+sy); ctx.lineTo(x+bw, y);
-            ctx.closePath(); ctx.fill();
-        }
-        // 옆면
-        if(side) {
-            ctx.fillStyle = side;
-            ctx.beginPath();
-            ctx.moveTo(x+bw, y); ctx.lineTo(x+bw+sx, y+sy);
-            ctx.lineTo(x+bw+sx, y+bh+sy); ctx.lineTo(x+bw, y+bh);
-            ctx.closePath(); ctx.fill();
-        }
-        // 앞면
-        ctx.fillStyle = face;
-        ctx.fillRect(x, y, bw, bh);
+    // 모델이 아직 로드 안됐으면 대기
+    if (!weaponModels3D[wpnIdx]) {
+        weaponRenderer.clear();
+        return;
     }
 
-    // 3D 원통 (가로)
-    function tube(x, y, len, r, color) {
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y - r, len, r*2);
-        const g = ctx.createLinearGradient(x, y-r, x, y+r);
-        g.addColorStop(0, 'rgba(255,255,255,0.12)');
-        g.addColorStop(0.4, 'rgba(255,255,255,0.02)');
-        g.addColorStop(1, 'rgba(0,0,0,0.15)');
-        ctx.fillStyle = g;
-        ctx.fillRect(x, y - r, len, r*2);
-        // 총구 쪽 원
-        ctx.fillStyle = color;
-        ctx.beginPath(); ctx.ellipse(x, y, r, r*0.7, 0, 0, Math.PI*2); ctx.fill();
+    // 무기 교체
+    if (currentWeapon3D !== weaponModels3D[wpnIdx]) {
+        if (currentWeapon3D) weaponScene.remove(currentWeapon3D);
+        currentWeapon3D = weaponModels3D[wpnIdx];
+        weaponScene.add(currentWeapon3D);
     }
 
-    // 밀리터리 팔 (긴 전투복 소매 + 택티컬 장갑)
-    function drawArm(x, y, angle, len) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.scale(-1, 1);
-        ctx.rotate(-angle);
+    // 애니메이션 계산
+    const t = Date.now();
+    const isMoving = keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'];
+    const bobX = isMoving ? Math.sin(t * 0.008) * 0.012 : Math.sin(t * 0.002) * 0.002;
+    const bobY = isMoving ? Math.abs(Math.cos(t * 0.008)) * 0.015 : Math.cos(t * 0.003) * 0.002;
+    const recoilKick = player.shootCooldown > 0 ? player.shootCooldown * 0.003 : 0;
+    const adsLerp = player.adsAmount || 0;
 
-        // === 전투복 소매 (팔뚝~어깨) ===
-        // 팔 두께 (어깨 쪽 두껍게, 손목 쪽 가늘게)
-        const armW1 = 18; // 어깨 쪽
-        const armW2 = 13; // 손목 쪽
-        // OCP/멀티캠 기본색
-        const sleeveGrad = ctx.createLinearGradient(0, -armW1/2, 0, armW1/2);
-        sleeveGrad.addColorStop(0, '#5a6a48'); sleeveGrad.addColorStop(0.3, '#4e5e3c');
-        sleeveGrad.addColorStop(0.7, '#435332'); sleeveGrad.addColorStop(1, '#3a4a2a');
-        ctx.fillStyle = sleeveGrad;
-        // 사다리꼴 팔 (어깨→손목)
-        ctx.beginPath();
-        ctx.moveTo(-10, -armW1/2); ctx.lineTo(len-10, -armW2/2);
-        ctx.lineTo(len-10, armW2/2); ctx.lineTo(-10, armW1/2);
-        ctx.closePath(); ctx.fill();
+    // 위치 (idle ↔ ADS 보간)
+    const cfg = currentWeapon3D.userData.config || weaponModelConfigs[wpnIdx] || {};
+    const idleP = currentWeapon3D.userData.idlePos || new THREE.Vector3(0.20, -0.18, -0.50);
+    const adsP = currentWeapon3D.userData.adsPos || new THREE.Vector3(0.0, -0.12, -0.38);
 
-        // 멀티캠 위장 패턴 (불규칙)
-        const camoColors = ['rgba(80,70,40,0.18)', 'rgba(50,45,25,0.15)', 'rgba(100,90,60,0.12)', 'rgba(35,40,20,0.2)'];
-        for(let i = 0; i < Math.floor(len/12); i++) {
-            ctx.fillStyle = camoColors[i % camoColors.length];
-            const cx = -5 + i*12 + Math.sin(i*2.3)*3;
-            const cy = -6 + Math.sin(i*1.7)*4;
-            const cw = 8 + Math.sin(i*3.1)*3;
-            const ch = 5 + Math.cos(i*2.7)*2;
-            ctx.beginPath();
-            ctx.ellipse(cx, cy, cw/2, ch/2, i*0.3, 0, Math.PI*2);
-            ctx.fill();
-        }
-        // 소매 주름 (빛 반사)
-        ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
-        for(let i = 0; i < 3; i++) {
-            const px = 10 + i * (len/4);
-            ctx.beginPath();
-            ctx.moveTo(px, -armW1/2+3); ctx.lineTo(px+8, -armW2/2+2);
-            ctx.stroke();
-        }
-        // 소매 그림자 (하단)
-        ctx.fillStyle = 'rgba(0,0,0,0.08)';
-        ctx.beginPath();
-        ctx.moveTo(-10, armW1/2-4); ctx.lineTo(len-10, armW2/2-3);
-        ctx.lineTo(len-10, armW2/2); ctx.lineTo(-10, armW1/2);
-        ctx.closePath(); ctx.fill();
+    currentWeapon3D.position.lerpVectors(idleP, adsP, adsLerp);
+    currentWeapon3D.position.x += bobX * (1 - adsLerp * 0.7);
+    currentWeapon3D.position.y += bobY * (1 - adsLerp * 0.7);
+    currentWeapon3D.position.z -= recoilKick * 0.06;
 
-        // 소매 접힌 부분 (커프, 손목 쪽)
-        ctx.fillStyle = '#4a5a38';
-        ctx.fillRect(len-16, -armW2/2-1, 8, armW2+2);
-        ctx.fillStyle = '#3e4e30';
-        ctx.fillRect(len-15, -armW2/2, 6, armW2);
+    // 회전 - GLB 모델 기본 방향 + 반동
+    const rot = cfg.rotOffset || new THREE.Euler(0, Math.PI, 0);
+    currentWeapon3D.rotation.set(rot.x, rot.y, rot.z);
+    currentWeapon3D.rotation.x += recoilKick * 0.03;
 
-        // === 택티컬 장갑 손 ===
-        // 손목 밴드 (벨크로)
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(len-10, -armW2/2-1, 5, armW2+2);
-        ctx.fillStyle = '#2a2a2a';
-        ctx.fillRect(len-9, -armW2/2+1, 3, 5);
-
-        // 장갑 손등
-        const gloveGrad = ctx.createLinearGradient(len, -11, len, 11);
-        gloveGrad.addColorStop(0, '#2a2a2a'); gloveGrad.addColorStop(0.3, '#333');
-        gloveGrad.addColorStop(0.7, '#2a2a2a'); gloveGrad.addColorStop(1, '#1e1e1e');
-        ctx.fillStyle = gloveGrad;
-        ctx.beginPath(); ctx.ellipse(len, 0, 13, 11, 0, 0, Math.PI*2); ctx.fill();
-
-        // 너클 프로텍터 (하드셸)
-        ctx.fillStyle = '#3a3a3a';
-        for(let i = -1; i <= 1; i++) {
-            ctx.beginPath(); ctx.arc(len+2, i*4.5, 2.8, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#444';
-            ctx.beginPath(); ctx.arc(len+2, i*4.5, 1.5, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#3a3a3a';
-        }
-
-        // 손가락 (장갑 - 4개)
-        for(let i = -1.5; i <= 1.5; i++) {
-            ctx.fillStyle = (Math.abs(i)>1) ? '#252525' : '#2a2a2a';
-            const fy = i * 3.5;
-            ctx.fillRect(len+8, fy - 2, 9, 4);
-            // 손가락 끝 (둥글게)
-            ctx.beginPath(); ctx.arc(len+17, fy, 2, 0, Math.PI*2); ctx.fill();
-            // 손가락 관절 주름
-            ctx.fillStyle = '#222';
-            ctx.fillRect(len+12, fy-0.8, 1, 1.6);
-            ctx.fillRect(len+15, fy-0.8, 1, 1.6);
-        }
-
-        // 엄지 (위로)
-        ctx.fillStyle = '#2c2c2c';
-        ctx.beginPath();
-        ctx.moveTo(len-2, -10); ctx.lineTo(len+4, -15);
-        ctx.lineTo(len+8, -13); ctx.lineTo(len+2, -9);
-        ctx.closePath(); ctx.fill();
-        // 엄지 끝
-        ctx.beginPath(); ctx.arc(len+6, -14, 2.5, 0, Math.PI*2); ctx.fill();
-
-        // 장갑 손등 텍스쳐 라인
-        ctx.strokeStyle = 'rgba(60,60,60,0.3)'; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(len-3, -3); ctx.lineTo(len+6, -3); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(len-3, 3); ctx.lineTo(len+6, 3); ctx.stroke();
-
-        ctx.restore();
+    // 머즐 플래시
+    if (player.muzzleFlash > 0) {
+        muzzleFlashLight.position.copy(currentWeapon3D.position);
+        muzzleFlashLight.position.z -= 0.3;
+        muzzleFlashLight.intensity = (player.muzzleFlash / 4) * 3.0;
+        muzzleFlashLight.color.set(weapons[wpnIdx].color || '#ffaa44');
+    } else {
+        muzzleFlashLight.intensity = 0;
     }
 
-    if(wpnIdx === 0) {
-        // ===== AK-47 (현실적 3D 모델) =====
-        drawArm(75, 42, -0.5, 60);
-        drawArm(-60, 42, 0.22, 70);
+    weaponRenderer.render(weaponScene, weaponCamera);
+}
 
-        // --- 개머리판 (나무 + 금속) ---
-        // 나무 스톡 본체
-        const stockGrad = ctx.createLinearGradient(85, -16, 85, 20);
-        stockGrad.addColorStop(0, pal?pal.accent:'#8B6914'); stockGrad.addColorStop(0.3, pal?pal.accentLight:'#A0792C');
-        stockGrad.addColorStop(0.6, pal?pal.accentDark:'#7A5A10'); stockGrad.addColorStop(1, pal?pal.accentDark:'#5C4008');
-        ctx.fillStyle = stockGrad;
-        ctx.beginPath();
-        ctx.moveTo(150, -10); ctx.lineTo(148, 16);
-        ctx.lineTo(130, 18); ctx.lineTo(95, 20);
-        ctx.lineTo(88, 10); ctx.lineTo(88, -14);
-        ctx.lineTo(95, -16); ctx.closePath(); ctx.fill();
-        // 나무결 텍스쳐
-        ctx.strokeStyle = 'rgba(60,35,5,0.15)'; ctx.lineWidth = 1;
-        for(let i = 0; i < 5; i++) {
-            ctx.beginPath();
-            ctx.moveTo(92, -12+i*7); ctx.bezierCurveTo(110,-10+i*7, 130,-8+i*7, 148,-6+i*7);
-            ctx.stroke();
-        }
-        // 스톡 3D 탑 면
-        ctx.fillStyle = pal?pal.accentLight:'#A07A2E';
-        ctx.beginPath();
-        ctx.moveTo(95, -16); ctx.lineTo(100, -22); ctx.lineTo(155, -16); ctx.lineTo(150, -10); ctx.closePath(); ctx.fill();
-        // 스톡 버트플레이트 (금속)
-        ctx.fillStyle = pal?pal.bodyDark:'#3a3a3a';
-        ctx.fillRect(148, -10, 5, 26);
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.fillRect(148, -10, 5, 2);
-
-        // --- 리시버 (스탬프드 스틸) ---
-        const rcvGrad = ctx.createLinearGradient(-20, -20, -20, 22);
-        rcvGrad.addColorStop(0, pal?pal.body:'#4a4a4a'); rcvGrad.addColorStop(0.3, pal?pal.bodyDark:'#3a3a3a');
-        rcvGrad.addColorStop(0.7, pal?pal.bodyDarker:'#2d2d2d'); rcvGrad.addColorStop(1, pal?pal.bodyDarker:'#222');
-        ctx.fillStyle = rcvGrad;
-        ctx.fillRect(-25, -20, 118, 40);
-        // 리시버 3D 탑면
-        ctx.fillStyle = pal?pal.bodyLight:'#505050';
-        ctx.beginPath();
-        ctx.moveTo(-25, -20); ctx.lineTo(-20, -28); ctx.lineTo(98, -28); ctx.lineTo(93, -20); ctx.closePath(); ctx.fill();
-        // 리시버 3D 사이드
-        ctx.fillStyle = pal?pal.bodyDark:'#1e1e1e';
-        ctx.beginPath();
-        ctx.moveTo(93, -20); ctx.lineTo(98, -28); ctx.lineTo(98, 12); ctx.lineTo(93, 20); ctx.closePath(); ctx.fill();
-        // 리시버 리벳/핀
-        ctx.fillStyle = pal?pal.bodyLight:'#666';
-        ctx.beginPath(); ctx.arc(10, -5, 2.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(50, -5, 2.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(75, -5, 2.5, 0, Math.PI*2); ctx.fill();
-        // 이젝션 포트
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(20, -18, 30, 12);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(21, -17, 28, 10);
-
-        // --- 더스트커버 (상부) ---
-        box3D(-25, -24, 118, 5, 14, pal?pal.body:'#484848', pal?pal.bodyLight:'#5a5a5a', pal?pal.bodyDark:'#333');
-        // 더스트커버 릿지
-        ctx.fillStyle = pal?pal.bodyLight:'#555';
-        for(let i = 0; i < 6; i++) ctx.fillRect(-20+i*18, -24, 8, 1.5);
-
-        // --- 가스 튜브 (상부, 총열 위) ---
-        tube(-120, -14, 98, 4, pal?pal.body:'#555');
-        // 가스 블록
-        box3D(-122, -20, 8, 14, 5, pal?pal.barrel:'#444', pal?pal.bodyLight:'#555', pal?pal.bodyDark:'#333');
-
-        // --- 나무 핸드가드 (AK-47 특유) ---
-        const hgGrad = ctx.createLinearGradient(-120, -12, -120, 14);
-        hgGrad.addColorStop(0, pal?pal.accentLight:'#9A7420'); hgGrad.addColorStop(0.4, pal?pal.accent:'#8B6914');
-        hgGrad.addColorStop(0.7, pal?pal.accentDark:'#7A5A10'); hgGrad.addColorStop(1, pal?pal.accentDark:'#6A4A08');
-        ctx.fillStyle = hgGrad;
-        ctx.beginPath();
-        ctx.moveTo(-25, -12); ctx.lineTo(-120, -10);
-        ctx.lineTo(-120, 10); ctx.lineTo(-25, 14);
-        ctx.closePath(); ctx.fill();
-        // 핸드가드 3D 탑면
-        ctx.fillStyle = pal?pal.accentLight:'#A0792C';
-        ctx.beginPath();
-        ctx.moveTo(-25, -12); ctx.lineTo(-22, -18); ctx.lineTo(-117, -16); ctx.lineTo(-120, -10); ctx.closePath(); ctx.fill();
-        // 핸드가드 나무결
-        ctx.strokeStyle = 'rgba(60,35,5,0.12)'; ctx.lineWidth = 0.8;
-        for(let i = 0; i < 4; i++) {
-            ctx.beginPath();
-            ctx.moveTo(-25, -8+i*5); ctx.lineTo(-118, -6+i*5); ctx.stroke();
-        }
-        // 핸드가드 환기구 (금속 슬릿)
-        ctx.fillStyle = pal?pal.bodyDarker:'#333';
-        for(let i = 0; i < 4; i++) {
-            ctx.fillRect(-100+i*16, -6, 2, 12);
-        }
-
-        // --- 배럴 (크롬라인드 스틸) ---
-        const brlGrad = ctx.createLinearGradient(0, -7, 0, 7);
-        brlGrad.addColorStop(0, pal?pal.barrel:'#666'); brlGrad.addColorStop(0.3, pal?pal.barrelDark:'#4a4a4a');
-        brlGrad.addColorStop(0.7, pal?pal.barrelDark:'#3a3a3a'); brlGrad.addColorStop(1, pal?pal.barrelDarker:'#2a2a2a');
-        ctx.fillStyle = brlGrad;
-        ctx.fillRect(-200, -5, 85, 10);
-        // 배럴 하이라이트
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.fillRect(-200, -5, 85, 3);
-
-        // --- 프론트 사이트 포스트 ---
-        ctx.fillStyle = pal?pal.barrel:'#444';
-        ctx.fillRect(-130, -26, 3, 14);
-        // 사이트 후드
-        ctx.fillStyle = pal?pal.barrelDark:'#3a3a3a';
-        ctx.beginPath();
-        ctx.moveTo(-134, -28); ctx.lineTo(-126, -28);
-        ctx.lineTo(-128, -14); ctx.lineTo(-132, -14); ctx.closePath(); ctx.fill();
-        // 사이트 포스트 (오렌지 팁 없음, 밀리터리)
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.fillRect(-131, -30, 2, 4);
-
-        // --- 머즐 브레이크 (AK-47 특유 슬랜트 컷) ---
-        ctx.fillStyle = pal?pal.barrel:'#4a4a4a';
-        ctx.beginPath();
-        ctx.moveTo(-200, -7); ctx.lineTo(-218, -9);
-        ctx.lineTo(-220, -6); ctx.lineTo(-220, 6);
-        ctx.lineTo(-218, 9); ctx.lineTo(-200, 7);
-        ctx.closePath(); ctx.fill();
-        // 머즐 3D 탑
-        ctx.fillStyle = pal?pal.bodyLight:'#5a5a5a';
-        ctx.beginPath();
-        ctx.moveTo(-200, -7); ctx.lineTo(-198, -12); ctx.lineTo(-216, -14); ctx.lineTo(-218, -9); ctx.closePath(); ctx.fill();
-        // 머즐 슬릿 (슬랜트 컷)
-        ctx.fillStyle = pal?pal.barrelDarker:'#222';
-        ctx.fillRect(-218, -5, 18, 1.5);
-        ctx.fillRect(-218, 0, 18, 1.5);
-        ctx.fillRect(-218, 4, 18, 1.5);
-        // 총구 구멍
-        ctx.fillStyle = pal?pal.barrelDarker:'#111';
-        ctx.beginPath(); ctx.ellipse(-220, 0, 5, 4.5, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.barrelDarker:'#1a1a1a';
-        ctx.beginPath(); ctx.ellipse(-220, 0, 3.5, 3, 0, 0, Math.PI*2); ctx.fill();
-
-        // --- 바나나 탄창 (AK-47 특유 곡선) ---
+// 근접 공격 2D 이펙트 (F키)
+function drawMeleeEffect2D() {
+    if (player.meleeActive && player.weapon !== 5) {
+        const prog = 1 - player.meleeTime / 12;
         ctx.save();
-        ctx.translate(15, 18);
-        ctx.rotate(0.08); // 살짝 기울어진 곡선 탄창
-        const magGrad = ctx.createLinearGradient(0, 0, 0, 52);
-        magGrad.addColorStop(0, pal?pal.bodyDark:'#444'); magGrad.addColorStop(0.3, pal?pal.bodyDark:'#383838');
-        magGrad.addColorStop(0.7, pal?pal.bodyDarker:'#2d2d2d'); magGrad.addColorStop(1, pal?pal.bodyDarker:'#222');
-        ctx.fillStyle = magGrad;
-        // 곡선 탄창 형태
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(14, 0);
-        ctx.bezierCurveTo(16, 20, 18, 38, 20, 55);
-        ctx.lineTo(6, 55);
-        ctx.bezierCurveTo(4, 38, 2, 20, 0, 0);
-        ctx.closePath(); ctx.fill();
-        // 탄창 3D 사이드
-        ctx.fillStyle = pal?pal.bodyDarker:'#1e1e1e';
-        ctx.beginPath();
-        ctx.moveTo(14, 0); ctx.lineTo(17, -3);
-        ctx.bezierCurveTo(19, 17, 21, 35, 23, 52);
-        ctx.lineTo(20, 55); ctx.closePath(); ctx.fill();
-        // 탄창 릿지
-        ctx.fillStyle = pal?pal.body:'#4a4a4a';
-        ctx.fillRect(3, 5, 8, 1.5);
-        ctx.fillRect(4, 20, 9, 1.5);
-        ctx.fillRect(5, 35, 10, 1.5);
-        // 탄창 바닥판
-        ctx.fillStyle = pal?pal.bodyLight:'#555';
-        ctx.fillRect(5, 52, 16, 3);
-        ctx.restore();
-
-        // --- 피스톨 그립 (베이클라이트/나무) ---
-        ctx.save();
-        ctx.translate(58, 18);
-        ctx.rotate(0.15);
-        const gripGrad = ctx.createLinearGradient(0, 0, 0, 42);
-        gripGrad.addColorStop(0, pal?pal.accentDark:'#7A3B1E'); gripGrad.addColorStop(0.4, pal?pal.accentDark:'#6A3018');
-        gripGrad.addColorStop(0.8, pal?pal.bodyDarker:'#5A2510'); gripGrad.addColorStop(1, pal?pal.bodyDarker:'#4A1A08');
-        ctx.fillStyle = gripGrad;
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(18, 0);
-        ctx.lineTo(20, 40); ctx.lineTo(16, 44);
-        ctx.lineTo(2, 44); ctx.lineTo(-2, 40);
-        ctx.closePath(); ctx.fill();
-        // 그립 3D 사이드
-        ctx.fillStyle = pal?pal.bodyDarker:'#4A1A08';
-        ctx.beginPath();
-        ctx.moveTo(18, 0); ctx.lineTo(22, -3);
-        ctx.lineTo(24, 37); ctx.lineTo(20, 40); ctx.closePath(); ctx.fill();
-        // 그립 체커링 (격자 무늬)
-        ctx.strokeStyle = 'rgba(40,15,5,0.3)'; ctx.lineWidth = 0.7;
-        for(let i = 0; i < 8; i++) {
-            ctx.beginPath(); ctx.moveTo(3, 5+i*4.5); ctx.lineTo(15, 5+i*4.5); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(3+i*1.8, 5); ctx.lineTo(5+i*1.8, 41); ctx.stroke();
-        }
-        ctx.restore();
-
-        // --- 트리거 & 트리거가드 ---
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.fillRect(42, 12, 2, 10); // 트리거
-        ctx.strokeStyle = pal?pal.barrel:'#444'; ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.arc(46, 20, 10, -0.4, Math.PI + 0.4); ctx.stroke();
-
-        // --- 셀렉터 레버 ---
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.save();
-        ctx.translate(70, -8);
-        ctx.rotate(-0.3);
-        ctx.fillRect(0, 0, 18, 3);
-        ctx.beginPath(); ctx.arc(18, 1.5, 3, 0, Math.PI*2); ctx.fill();
-        ctx.restore();
-        // 셀렉터 마킹 (АВ)
-        ctx.fillStyle = '#666'; ctx.font = '5px monospace';
-        ctx.fillText('АВ', 72, 2);
-
-        // --- 리어 사이트 (탄젠트 사이트) ---
-        box3D(-25, -30, 14, 6, 8, pal?pal.barrel:'#444', pal?pal.bodyLight:'#555', pal?pal.bodyDark:'#333');
-        ctx.fillStyle = pal?pal.bodyLight:'#555';
-        ctx.fillRect(-21, -32, 6, 2);
-        // 사이트 눈금
-        ctx.fillStyle = '#666';
-        ctx.fillRect(-23, -30, 1, 4);
-        ctx.fillRect(-19, -30, 1, 4);
-
-        // --- 볼트 캐리어 핸들 ---
-        box3D(5, -30, 6, 5, 6, pal?pal.body:'#555', pal?pal.bodyLight:'#666', pal?pal.barrel:'#444');
-        ctx.fillStyle = pal?pal.bodyLight:'#666';
-        ctx.beginPath(); ctx.arc(8, -30, 3, 0, Math.PI*2); ctx.fill();
-
-        // --- 클리닝 로드 (배럴 아래, AK특유) ---
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.fillRect(-195, 8, 160, 1.5);
-        ctx.fillStyle = 'rgba(255,255,255,0.1)';
-        ctx.fillRect(-195, 8, 160, 0.5);
-
-        // --- 슬링 스위벨 (전방) ---
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.beginPath(); ctx.arc(-120, 14, 3, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = pal?pal.bodyLight:'#666'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(-120, 14, 3, 0, Math.PI*2); ctx.stroke();
-
-        // --- 리시버 각인/시리얼 ---
-        ctx.fillStyle = 'rgba(100,100,100,0.3)'; ctx.font = '4px monospace';
-        ctx.fillText('AK-47  7.62x39', 5, 10);
-
-        // --- 스프링 가이드 (후방) ---
-        ctx.fillStyle = pal?pal.barrel:'#444';
-        ctx.fillRect(86, -6, 4, 12);
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.beginPath(); ctx.arc(88, 0, 3, 0, Math.PI*2); ctx.fill();
-
-        // --- 금속 표면 스크래치 (사용감) ---
-        ctx.strokeStyle = 'rgba(120,120,120,0.08)'; ctx.lineWidth = 0.5;
-        for(let i = 0; i < 6; i++) {
-            const sx = -20 + i*18 + Math.random()*5;
-            ctx.beginPath();
-            ctx.moveTo(sx, -15+Math.random()*5); ctx.lineTo(sx+12, -13+Math.random()*5);
-            ctx.stroke();
-        }
-
-        // --- AK-47 악센트 글로우 ---
-        ctx.shadowColor = w.color; ctx.shadowBlur = 12;
-        ctx.fillStyle = w.color;
-        ctx.fillRect(-25, -28, 118, 1.5);
-        ctx.globalAlpha = 0.4;
-        ctx.fillRect(-200, -1, 80, 2);
-        ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
-
-        // --- 금속 광택 하이라이트 ---
-        ctx.fillStyle = 'rgba(255,255,255,0.04)';
-        ctx.fillRect(-25, -20, 118, 15);
-
-    } else if(wpnIdx === 1) {
-        // ===== 샷건 (가로) =====
-        drawArm(75, 38, -0.5, 55);
-        drawArm(-65, 40, 0.28, 65);
-
-        // 개머리판 (나무)
-        box3D(80, -16, 55, 32, 12, pal?pal.accent:'#6a4a2a', pal?pal.accentLight:'#7a5a3a', pal?pal.accentDark:'#5a3a1a');
-        ctx.fillStyle = pal?pal.accentDark:'#5a3a1a';
-        ctx.fillRect(130, -13, 5, 26);
-        // 총몸
-        box3D(-15, -18, 100, 36, 12, pal?pal.body:'#5a4030', pal?pal.bodyLight:'#6a5040', pal?pal.bodyDark:'#4a3020');
-        // 펌프 핸드가드
-        box3D(-80, -14, 65, 28, 14, pal?pal.accent:'#7a5a3a', pal?pal.accentLight:'#8a6a4a', pal?pal.accentDark:'#6a4a2a');
-        // 더블배럴
-        tube(-180, -5, 105, 6, pal?pal.barrel:'#3a3a3a');
-        tube(-180, 5, 105, 6, pal?pal.barrel:'#3a3a3a');
-        // 총구
-        ctx.fillStyle = pal?pal.barrelDarker:'#222';
-        ctx.beginPath(); ctx.ellipse(-180, -5, 6, 5, 0, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(-180, 5, 6, 5, 0, 0, Math.PI*2); ctx.fill();
-        // 그립
-        box3D(45, 16, 18, 38, 8, pal?pal.body:'#5a4030', pal?pal.bodyLight:'#6a5040', pal?pal.bodyDark:'#4a3020');
-        // 악센트
-        ctx.shadowColor = pal?pal.accent:w.color; ctx.shadowBlur = 8;
-        ctx.fillStyle = pal?pal.accent:w.color;
-        ctx.fillRect(-80, -16, 65, 2);
-        ctx.shadowBlur = 0;
-
-    } else if(wpnIdx === 2) {
-        // ===== 스나이퍼 라이플 (Barrett M82 / AWM 하이브리드, 현실적 3D) =====
-        drawArm(72, 40, -0.5, 58);
-        drawArm(-85, 42, 0.24, 72);
-
-        // --- 개머리판 (폴리머 택티컬 스톡) ---
-        const snStockGrad = ctx.createLinearGradient(85, -14, 85, 14);
-        snStockGrad.addColorStop(0, pal?pal.body:'#353535'); snStockGrad.addColorStop(0.5, pal?pal.bodyDark:'#2a2a2a');
-        snStockGrad.addColorStop(1, pal?pal.bodyDarker:'#1e1e1e');
-        ctx.fillStyle = snStockGrad;
-        ctx.beginPath();
-        ctx.moveTo(88, -12); ctx.lineTo(155, -8);
-        ctx.lineTo(160, -2); ctx.lineTo(158, 14);
-        ctx.lineTo(150, 18); ctx.lineTo(88, 16);
-        ctx.closePath(); ctx.fill();
-        // 스톡 3D 탑면
-        ctx.fillStyle = pal?pal.bodyLight:'#404040';
-        ctx.beginPath();
-        ctx.moveTo(88, -12); ctx.lineTo(92, -18); ctx.lineTo(159, -14); ctx.lineTo(155, -8); ctx.closePath(); ctx.fill();
-        // 체크레스트 (치크 패드)
-        ctx.fillStyle = pal?pal.bodyDark:'#333';
-        ctx.fillRect(100, -10, 40, 8);
-        const chkGrad = ctx.createLinearGradient(100, -10, 100, -2);
-        chkGrad.addColorStop(0, pal?pal.bodyDark:'#3a3a3a'); chkGrad.addColorStop(1, pal?pal.bodyDarker:'#2a2a2a');
-        ctx.fillStyle = chkGrad;
-        ctx.fillRect(100, -10, 40, 8);
-        // 버트 패드 (고무)
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(156, -6, 5, 20);
-        // 버트 패드 텍스쳐
-        ctx.fillStyle = '#252525';
-        for(let i = 0; i < 4; i++) ctx.fillRect(157, -4+i*4.5, 3, 2);
-        // 스톡 쓸림 방지 텍스쳐
-        ctx.fillStyle = 'rgba(60,60,60,0.3)';
-        for(let i = 0; i < 3; i++) {
-            ctx.fillRect(105+i*12, 8, 8, 6);
-        }
-
-        // --- 리시버 (마시닝드 알루미늄) ---
-        const snRcvGrad = ctx.createLinearGradient(-25, -18, -25, 22);
-        snRcvGrad.addColorStop(0, pal?pal.body:'#3a3a3a'); snRcvGrad.addColorStop(0.4, pal?pal.bodyDark:'#303030');
-        snRcvGrad.addColorStop(0.7, pal?pal.bodyDarker:'#282828'); snRcvGrad.addColorStop(1, pal?pal.bodyDarker:'#202020');
-        ctx.fillStyle = snRcvGrad;
-        ctx.fillRect(-30, -18, 122, 36);
-        // 리시버 3D 탑
-        ctx.fillStyle = pal?pal.bodyLight:'#454545';
-        ctx.beginPath();
-        ctx.moveTo(-30, -18); ctx.lineTo(-26, -26); ctx.lineTo(96, -26); ctx.lineTo(92, -18); ctx.closePath(); ctx.fill();
-        // 리시버 3D 사이드
-        ctx.fillStyle = pal?pal.bodyDarker:'#1a1a1a';
-        ctx.beginPath();
-        ctx.moveTo(92, -18); ctx.lineTo(96, -26); ctx.lineTo(96, 10); ctx.lineTo(92, 18); ctx.closePath(); ctx.fill();
-        // 이젝션 포트
-        ctx.fillStyle = '#151515';
-        ctx.fillRect(15, -16, 35, 14);
-        ctx.fillStyle = '#282828';
-        ctx.fillRect(16, -15, 33, 12);
-
-        // --- 피카티니 레일 (상부, 롱) ---
-        const railLen = 150;
-        box3D(-40, -24, railLen, 4, 12, pal?pal.body:'#404040', pal?pal.bodyLight:'#505050', pal?pal.bodyDark:'#2a2a2a');
-        // 레일 슬롯 (피카티니)
-        ctx.fillStyle = pal?pal.body:'#4a4a4a';
-        for(let i = 0; i < Math.floor(railLen/6); i++) {
-            ctx.fillRect(-38+i*6, -24, 2, 4);
-        }
-
-        // --- 프리플로트 핸드가드 (알루미늄 M-LOK) ---
-        const hgGrad2 = ctx.createLinearGradient(-120, -14, -120, 14);
-        hgGrad2.addColorStop(0, pal?pal.body:'#383838'); hgGrad2.addColorStop(0.5, pal?pal.bodyDark:'#2e2e2e');
-        hgGrad2.addColorStop(1, pal?pal.bodyDarker:'#242424');
-        ctx.fillStyle = hgGrad2;
-        ctx.fillRect(-120, -14, 95, 28);
-        // 핸드가드 3D 탑
-        ctx.fillStyle = pal?pal.bodyLight:'#424242';
-        ctx.beginPath();
-        ctx.moveTo(-120, -14); ctx.lineTo(-116, -20); ctx.lineTo(-21, -20); ctx.lineTo(-25, -14); ctx.closePath(); ctx.fill();
-        // M-LOK 슬롯
-        ctx.fillStyle = pal?pal.barrelDarker:'#1a1a1a';
-        for(let i = 0; i < 5; i++) {
-            ctx.fillRect(-110+i*17, -8, 12, 3);
-            ctx.fillRect(-110+i*17, 5, 12, 3);
-        }
-        // 핸드가드 사이드 엣지
-        ctx.fillStyle = pal?pal.bodyDark:'#353535';
-        ctx.fillRect(-120, -14, 2, 28);
-        ctx.fillRect(-27, -14, 2, 28);
-
-        // --- 헤비 프로파일 배럴 (불 배럴) ---
-        const brlGrad2 = ctx.createLinearGradient(0, -7, 0, 7);
-        brlGrad2.addColorStop(0, pal?pal.barrel:'#555'); brlGrad2.addColorStop(0.2, pal?pal.barrelDark:'#4a4a4a');
-        brlGrad2.addColorStop(0.5, pal?pal.barrelDark:'#3a3a3a'); brlGrad2.addColorStop(0.8, pal?pal.barrelDarker:'#2e2e2e');
-        brlGrad2.addColorStop(1, pal?pal.barrelDarker:'#222');
-        ctx.fillStyle = brlGrad2;
-        ctx.fillRect(-235, -6, 120, 12);
-        // 배럴 플루팅 (열 방출 그루브)
-        ctx.fillStyle = 'rgba(0,0,0,0.08)';
-        for(let i = 0; i < 8; i++) {
-            ctx.fillRect(-230+i*14, -5, 2, 10);
-        }
-        // 배럴 하이라이트
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        ctx.fillRect(-235, -6, 120, 4);
-
-        // --- 머즐 브레이크 (대구경 스나이퍼) ---
-        ctx.fillStyle = pal?pal.barrel:'#3a3a3a';
-        ctx.beginPath();
-        ctx.moveTo(-235, -8); ctx.lineTo(-260, -10);
-        ctx.lineTo(-262, -7); ctx.lineTo(-262, 7);
-        ctx.lineTo(-260, 10); ctx.lineTo(-235, 8);
-        ctx.closePath(); ctx.fill();
-        // 머즐 3D 탑
-        ctx.fillStyle = pal?pal.barrelDark:'#4a4a4a';
-        ctx.beginPath();
-        ctx.moveTo(-235, -8); ctx.lineTo(-232, -14); ctx.lineTo(-257, -16); ctx.lineTo(-260, -10); ctx.closePath(); ctx.fill();
-        // 머즐 배플 (가스 포트)
-        ctx.fillStyle = pal?pal.barrelDarker:'#222';
-        for(let i = 0; i < 3; i++) {
-            ctx.fillRect(-255+i*8, -8, 2, 16);
-        }
-        // 사이드 포트
-        ctx.fillStyle = pal?pal.barrelDarker:'#1a1a1a';
-        ctx.fillRect(-258, -5, 20, 1.5);
-        ctx.fillRect(-258, 0, 20, 1.5);
-        ctx.fillRect(-258, 4, 20, 1.5);
-        // 총구 구멍
-        ctx.fillStyle = pal?pal.barrelDarker:'#0a0a0a';
-        ctx.beginPath(); ctx.ellipse(-262, 0, 6, 5.5, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.barrelDarker:'#151515';
-        ctx.beginPath(); ctx.ellipse(-262, 0, 4, 3.5, 0, 0, Math.PI*2); ctx.fill();
-
-        // --- 스코프 (택티컬 변동 배율) ---
-        // 스코프 마운트 링
-        ctx.fillStyle = pal?pal.bodyDarker:'#2a2a2a';
-        ctx.fillRect(-5, -32, 8, 8);
-        ctx.fillRect(55, -32, 8, 8);
-        // 스코프 본체
-        const scopeGrad = ctx.createLinearGradient(-12, -48, -12, -32);
-        scopeGrad.addColorStop(0, pal?pal.bodyDark:'#2a2a2a'); scopeGrad.addColorStop(0.5, pal?pal.bodyDarker:'#222');
-        scopeGrad.addColorStop(1, pal?pal.bodyDarker:'#1a1a1a');
-        ctx.fillStyle = scopeGrad;
-        ctx.fillRect(-12, -48, 86, 18);
-        // 스코프 3D 탑
-        ctx.fillStyle = pal?pal.bodyDark:'#333';
-        ctx.beginPath();
-        ctx.moveTo(-12, -48); ctx.lineTo(-8, -52); ctx.lineTo(78, -52); ctx.lineTo(74, -48); ctx.closePath(); ctx.fill();
-        // 오브젝티브 렌즈 (전면 - 큰 렌즈)
-        ctx.fillStyle = pal?pal.bodyDarker:'#1a1a1a';
-        ctx.beginPath(); ctx.ellipse(-12, -39, 10, 10, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.accentLight:'#00ccff'; ctx.globalAlpha = 0.35;
-        ctx.beginPath(); ctx.ellipse(-12, -39, 8, 8, 0, 0, Math.PI*2); ctx.fill();
-        // 렌즈 반사
-        ctx.fillStyle = pal?pal.accentLight:'#00eeff'; ctx.globalAlpha = 0.15;
-        ctx.beginPath(); ctx.ellipse(-14, -41, 4, 3, -0.3, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
-        // 아이피스 렌즈 (후면)
-        ctx.fillStyle = pal?pal.bodyDarker:'#1a1a1a';
-        ctx.beginPath(); ctx.ellipse(74, -39, 8, 8, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.accentLight:'#00ccff'; ctx.globalAlpha = 0.25;
-        ctx.beginPath(); ctx.ellipse(74, -39, 6, 6, 0, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
-        // 배율 조절 다이얼
-        ctx.fillStyle = pal?pal.barrel:'#444';
-        ctx.beginPath(); ctx.ellipse(30, -50, 6, 4, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.beginPath(); ctx.ellipse(30, -50, 4, 3, 0, 0, Math.PI*2); ctx.fill();
-        // 엘리베이션 터렛
-        ctx.fillStyle = pal?pal.barrelDark:'#3a3a3a';
-        ctx.fillRect(42, -56, 10, 8);
-        ctx.fillStyle = pal?pal.barrel:'#444';
-        for(let i = 0; i < 3; i++) ctx.fillRect(43, -55+i*2.5, 8, 1);
-        // 윈디지 터렛
-        ctx.fillStyle = pal?pal.barrelDark:'#3a3a3a';
-        ctx.fillRect(78, -44, 6, 10);
-        // 스코프 글로우
-        ctx.shadowColor = pal?pal.accent:'#00ccff'; ctx.shadowBlur = 15;
-        ctx.fillStyle = pal?pal.accent:'#00ccff'; ctx.globalAlpha = 0.2;
-        ctx.beginPath(); ctx.ellipse(-12, -39, 7, 7, 0, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-
-        // --- 볼트 액션 핸들 ---
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.save();
-        ctx.translate(12, -22);
-        ctx.rotate(-0.2);
-        ctx.fillRect(0, 0, 5, 12);
-        ctx.fillStyle = pal?pal.bodyLight:'#666';
-        ctx.beginPath(); ctx.ellipse(2.5, 12, 4, 3, 0, 0, Math.PI*2); ctx.fill();
-        ctx.restore();
-
-        // --- 탄창 (디태쳐블 박스 매거진) ---
-        const snMagGrad = ctx.createLinearGradient(22, 16, 22, 48);
-        snMagGrad.addColorStop(0, pal?pal.bodyDark:'#383838'); snMagGrad.addColorStop(0.5, pal?pal.bodyDarker:'#2a2a2a');
-        snMagGrad.addColorStop(1, pal?pal.bodyDarker:'#1e1e1e');
-        ctx.fillStyle = snMagGrad;
-        ctx.beginPath();
-        ctx.moveTo(22, 16); ctx.lineTo(36, 16);
-        ctx.lineTo(38, 50); ctx.lineTo(20, 50);
-        ctx.closePath(); ctx.fill();
-        // 탄창 3D 사이드
-        ctx.fillStyle = pal?pal.bodyDarker:'#171717';
-        ctx.beginPath();
-        ctx.moveTo(36, 16); ctx.lineTo(40, 13);
-        ctx.lineTo(42, 47); ctx.lineTo(38, 50); ctx.closePath(); ctx.fill();
-        // 탄창 릿지
-        ctx.fillStyle = pal?pal.barrel:'#444';
-        ctx.fillRect(24, 22, 10, 1.5);
-        ctx.fillRect(24, 34, 10, 1.5);
-
-        // --- 피스톨 그립 (에르고노믹) ---
-        ctx.save();
-        ctx.translate(52, 16);
-        ctx.rotate(0.12);
-        const snGripGrad = ctx.createLinearGradient(0, 0, 0, 42);
-        snGripGrad.addColorStop(0, pal?pal.bodyDark:'#2e2e2e'); snGripGrad.addColorStop(0.5, pal?pal.bodyDarker:'#252525');
-        snGripGrad.addColorStop(1, pal?pal.bodyDarker:'#1a1a1a');
-        ctx.fillStyle = snGripGrad;
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(16, 0);
-        ctx.bezierCurveTo(18, 15, 18, 30, 16, 42);
-        ctx.lineTo(2, 42);
-        ctx.bezierCurveTo(0, 30, 0, 15, 0, 0);
-        ctx.closePath(); ctx.fill();
-        // 그립 텍스쳐 (스티플링)
-        ctx.fillStyle = 'rgba(60,60,60,0.4)';
-        for(let r = 0; r < 6; r++) {
-            for(let c = 0; c < 3; c++) {
-                ctx.beginPath(); ctx.arc(4+c*4, 8+r*5, 1, 0, Math.PI*2); ctx.fill();
-            }
-        }
-        ctx.restore();
-
-        // --- 트리거 & 트리거가드 ---
-        ctx.fillStyle = '#555';
-        ctx.fillRect(42, 12, 2, 10);
-        ctx.strokeStyle = '#444'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(46, 20, 9, -0.4, Math.PI + 0.4); ctx.stroke();
-
-        // --- 바이포드 (해리스 스타일) ---
-        ctx.save();
-        // 왼쪽 다리
-        ctx.strokeStyle = '#555'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(-105, 14); ctx.lineTo(-125, 55); ctx.stroke();
-        // 오른쪽 다리
-        ctx.beginPath(); ctx.moveTo(-95, 14); ctx.lineTo(-75, 55); ctx.stroke();
-        // 다리 3D 두께
-        ctx.strokeStyle = '#666'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(-104, 14); ctx.lineTo(-124, 55); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-94, 14); ctx.lineTo(-74, 55); ctx.stroke();
-        // 고무 발
-        ctx.fillStyle = '#222';
-        ctx.beginPath(); ctx.ellipse(-125, 56, 4, 3, 0.3, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(-75, 56, 4, 3, -0.3, 0, Math.PI*2); ctx.fill();
-        // 마운트
-        ctx.fillStyle = '#444';
-        ctx.fillRect(-108, 10, 16, 6);
-        ctx.restore();
-
-        // --- 슬링 어태치 포인트 ---
-        ctx.fillStyle = '#555';
-        ctx.beginPath(); ctx.arc(82, 5, 3, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(82, 5, 3, 0, Math.PI*2); ctx.stroke();
-
-        // --- 악센트 글로우 ---
-        ctx.shadowColor = w.color; ctx.shadowBlur = 10;
-        ctx.fillStyle = w.color;
-        ctx.fillRect(-40, -26, railLen, 1.5);
-        ctx.globalAlpha = 0.3;
-        ctx.fillRect(-235, -1, 120, 2);
-        ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
-
-        // --- 금속 광택 ---
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
-        ctx.fillRect(-30, -18, 122, 14);
-
-        // --- 리시버 각인/시리얼 ---
-        ctx.fillStyle = 'rgba(100,100,100,0.25)'; ctx.font = '3.5px monospace';
-        ctx.fillText('BARRETT M82A1  .50 BMG', -5, 10);
-        ctx.fillStyle = 'rgba(80,80,80,0.2)'; ctx.font = '3px monospace';
-        ctx.fillText('SN: BF-50827', 40, 14);
-
-        // --- 충전 핸들 / 포워드 어시스트 ---
-        ctx.fillStyle = pal?pal.bodyDark:'#4a4a4a';
-        ctx.fillRect(70, -16, 6, 5);
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.beginPath(); ctx.arc(73, -16, 3, 0, Math.PI*2); ctx.fill();
-
-        // --- 세이프티 셀렉터 ---
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.beginPath(); ctx.arc(58, 8, 3, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.bodyLight:'#666';
-        ctx.beginPath(); ctx.arc(58, 8, 1.5, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,50,50,0.3)'; ctx.font = '3px sans-serif';
-        ctx.fillText('S', 54, 15); ctx.fillText('F', 62, 15);
-
-        // --- 탄창 릿지 디테일 ---
-        ctx.fillStyle = pal?pal.bodyDarker:'#333';
-        ctx.fillRect(23, 17, 12, 1);
-        ctx.fillRect(23, 44, 12, 1);
-
-        // --- 핸드가드 통풍구 ---
-        ctx.fillStyle = 'rgba(20,20,20,0.3)';
-        for(let i = 0; i < 4; i++) {
-            ctx.beginPath();
-            ctx.ellipse(-108+i*20, 0, 2, 6, 0, 0, Math.PI*2); ctx.fill();
-        }
-
-        // --- 배럴 히트 쉴드 (상부) ---
-        ctx.fillStyle = 'rgba(60,60,60,0.15)';
-        ctx.fillRect(-225, -8, 100, 2);
-
-        // --- 금속 표면 스크래치 (사용감) ---
-        ctx.strokeStyle = 'rgba(100,100,100,0.06)'; ctx.lineWidth = 0.5;
-        for(let i = 0; i < 8; i++) {
-            const sx = -100 + i*22 + Math.random()*4;
-            ctx.beginPath();
-            ctx.moveTo(sx, -15+Math.random()*3); ctx.lineTo(sx+14, -13+Math.random()*3);
-            ctx.stroke();
-        }
-
-        // --- 바이포드 조인트 디테일 ---
-        ctx.fillStyle = pal?pal.bodyDark:'#3a3a3a';
-        ctx.beginPath(); ctx.arc(-105, 14, 4, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(-95, 14, 4, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.body:'#555';
-        ctx.beginPath(); ctx.arc(-105, 14, 2, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(-95, 14, 2, 0, Math.PI*2); ctx.fill();
-
-        // --- 스코프 크로스헤어 반사 ---
-        ctx.fillStyle = 'rgba(0,255,200,0.05)';
-        ctx.fillRect(-14, -39.5, 4, 1);
-        ctx.fillRect(-12.5, -41, 1, 4);
-
-    } else if(wpnIdx === 3) {
-        // ===== 로켓런처 (가로, 큰 튜브) =====
-        drawArm(55, 42, -0.4, 55);
-        drawArm(-55, 44, 0.28, 60);
-
-        // 메인 튜브
-        tube(-150, 0, 250, 22, pal?pal.body:'#3a5a3a');
-        // 전면 개구부
-        ctx.fillStyle = pal?pal.barrelDarker:'#111';
-        ctx.beginPath(); ctx.ellipse(-150, 0, 20, 18, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.barrelDarker:'#1a1a1a';
-        ctx.beginPath(); ctx.ellipse(-150, 0, 15, 13, 0, 0, Math.PI*2); ctx.fill();
-        // 후면
-        ctx.fillStyle = pal?pal.bodyDark:'#2a4a2a';
-        ctx.beginPath(); ctx.ellipse(100, 0, 22, 20, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.bodyDarker:'#1a3a1a';
-        ctx.beginPath(); ctx.ellipse(100, 0, 16, 14, 0, 0, Math.PI*2); ctx.fill();
-        // 조준기
-        box3D(-100, -30, 12, 10, 6, pal?pal.body:'#555', pal?pal.bodyLight:'#666', pal?pal.barrel:'#444');
-        ctx.fillStyle = pal?pal.accent:w.color; ctx.globalAlpha = 0.5;
-        ctx.beginPath(); ctx.arc(-94, -25, 2, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
-        // 그립
-        box3D(20, 20, 18, 35, 8, pal?pal.bodyDark:'#333', pal?pal.barrel:'#444', pal?pal.bodyDarker:'#222');
-        // 사이드 핸들
-        box3D(-50, -32, 8, 14, 5, pal?pal.barrel:'#444', pal?pal.body:'#555', pal?pal.bodyDark:'#333');
-        // 디테일 리브
-        ctx.fillStyle = pal?pal.bodyDark:'#2a4a2a';
-        for(let i = 0; i < 6; i++) ctx.fillRect(-130+i*38, -20, 2, 40);
-        // 악센트
-        ctx.shadowColor = pal?pal.accent:w.color; ctx.shadowBlur = 10;
-        ctx.fillStyle = pal?pal.accent:w.color;
-        ctx.fillRect(-150, -22, 250, 2);
-        ctx.fillRect(-150, 20, 250, 2);
-        ctx.shadowBlur = 0;
-
-    } else if(wpnIdx === 4) {
-        // ===== 권총 (가로, 좀 더 작게) =====
-        drawArm(45, 28, -0.5, 50);
-
-        // 슬라이드
-        box3D(-60, -12, 90, 24, 10, pal?pal.bodyDark:'#2a2a2a', pal?pal.body:'#3a3a3a', pal?pal.bodyDarker:'#1a1a1a');
-        // 총열
-        tube(-80, 0, 22, 4, pal?pal.barrel:'#444');
-        // 총구
-        ctx.fillStyle = pal?pal.bodyDark:'#333';
-        ctx.beginPath(); ctx.ellipse(-80, 0, 4, 3.5, 0, 0, Math.PI*2); ctx.fill();
-        // 프레임
-        box3D(-15, 10, 50, 20, 8, pal?pal.bodyDark:'#333', pal?pal.barrel:'#444', pal?pal.bodyDarker:'#252525');
-        // 그립
-        box3D(10, 10, 16, 35, 7, pal?pal.body:'#3a3a3a', pal?pal.bodyLight:'#4a4a4a', pal?pal.bodyDark:'#2a2a2a');
-        // 그립 텍스처
-        ctx.fillStyle = pal?pal.bodyDarker:'#2a2a2a';
-        for(let i = 0; i < 5; i++) ctx.fillRect(12, 15+i*5, 12, 2);
-        // 트리거가드
-        ctx.strokeStyle = pal?pal.barrel:'#444'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(5, 18, 9, -0.3, Math.PI+0.3); ctx.stroke();
-        // 슬라이드 라인
-        ctx.fillStyle = pal?pal.barrel:'#444';
-        ctx.fillRect(-58, 0, 85, 1);
-        // 탄창
-        box3D(14, 30, 10, 16, 5, pal?pal.bodyDark:'#2a2a2a', pal?pal.body:'#3a3a3a', pal?pal.bodyDarker:'#1a1a1a');
-        // 악센트
-        ctx.fillStyle = pal?pal.accentLight:'#aaa';
-        ctx.fillRect(-60, -13, 90, 1.5);
-
-    } else if(wpnIdx === 5) {
-        // ===== 낫 (가로, 큰 낫날) =====
-        const swingAngle = player.meleeActive ? (1 - player.meleeTime/12) * Math.PI * 0.6 - 0.3 : 0;
-        ctx.rotate(swingAngle);
-
-        drawArm(35, 25, -0.3, 50);
-
-        // 자루 (길고 가로)
-        box3D(-120, -8, 180, 16, 8, pal?pal.accent:'#5a4030', pal?pal.accentLight:'#6a5040', pal?pal.accentDark:'#4a3020');
-        // 자루 감는 부분
-        ctx.fillStyle = pal?pal.accentLight:'#7a5a3a';
-        for(let i = 0; i < 6; i++) ctx.fillRect(-20+i*15, -8, 5, 16);
-
-        // 날 (크고 멋있게, 앞쪽으로)
-        const bladeColor = pal?pal.accent:'#cc44ff';
-        ctx.shadowColor = bladeColor; ctx.shadowBlur = 20;
-        // 날 면
-        ctx.fillStyle = pal ? shadeColor(pal.accent, 30)+'33' : 'rgba(204,68,255,0.2)';
-        ctx.beginPath();
-        ctx.moveTo(-120, -8);
-        ctx.quadraticCurveTo(-170, -70, -140, -110);
-        ctx.lineTo(-110, -60);
-        ctx.lineTo(-120, -8);
-        ctx.closePath();
-        ctx.fill();
-        // 날 외곽
-        ctx.strokeStyle = bladeColor; ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(-120, -8);
-        ctx.quadraticCurveTo(-170, -70, -140, -110);
-        ctx.stroke();
-        // 날 안쪽 엣지
-        ctx.strokeStyle = pal ? shadeColor(pal.accent, -20)+'66' : 'rgba(204,68,255,0.4)'; ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-118, -15);
-        ctx.quadraticCurveTo(-155, -60, -135, -95);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        // 날 끝
-        ctx.fillStyle = pal?pal.accentLight:'#ee77ff';
-        ctx.beginPath(); ctx.arc(-140, -110, 4, 0, Math.PI*2); ctx.fill();
-        // 연결부
-        box3D(-128, -14, 16, 12, 6, pal?pal.barrel:'#444', pal?pal.body:'#555', pal?pal.bodyDark:'#333');
-
-    } else if(wpnIdx === 6) {
-        // ===== 수류탄 (가로, 손에 들고) =====
-        drawArm(25, 20, -0.4, 45);
-
-        // 몸통 (구체)
-        const grd = ctx.createRadialGradient(-25, -25, 5, -20, -20, 28);
-        grd.addColorStop(0, pal?pal.bodyLight:'#5a8a5a');
-        grd.addColorStop(0.6, pal?pal.body:'#3a6a3a');
-        grd.addColorStop(1, pal?pal.bodyDark:'#2a4a2a');
-        ctx.fillStyle = grd;
-        ctx.beginPath(); ctx.ellipse(-20, -20, 26, 28, 0, 0, Math.PI*2); ctx.fill();
-        // 줄무늬
-        ctx.fillStyle = pal?pal.accent:'#44cc44'; ctx.globalAlpha = 0.3;
-        ctx.fillRect(-44, -28, 48, 3);
-        ctx.fillRect(-44, -18, 48, 3);
-        ctx.fillRect(-44, -8, 48, 3);
-        ctx.globalAlpha = 1;
-        // 퓨즈 상부
-        box3D(-28, -54, 16, 10, 6, pal?pal.bodyLight:'#666', pal?pal.accentLight:'#777', pal?pal.body:'#555');
-        // 레버
-        ctx.fillStyle = pal?pal.bodyLight:'#888';
-        ctx.fillRect(-24, -70, 5, 18);
-        box3D(-26, -72, 9, 5, 4, pal?pal.bodyLight:'#777', pal?pal.accentLight:'#888', pal?pal.body:'#666');
-        // 핀
-        ctx.fillStyle = pal?pal.accentLight:'#ddd';
-        ctx.beginPath(); ctx.arc(-12, -66, 5, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = pal?pal.accent:'#bbb';
-        ctx.beginPath(); ctx.arc(-12, -66, 3, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = pal?pal.accentLight:'#ccc'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(-12, -66, 4.5, 0, Math.PI*2); ctx.stroke();
-    }
-
-    // 머즐 플래시 (회전된 좌표 안에서 그리기 - 총구 위치)
-    if(player.muzzleFlash > 0 && wpnIdx < 4) {
-        const mfX = wpnIdx===2 ? -262 : wpnIdx===1 ? -180 : wpnIdx===3 ? -150 : -220;
-        const mfY = 0;
-        const intensity = player.muzzleFlash / 4;
-        ctx.save();
-        ctx.shadowColor = 'rgba(255,200,50,0.9)'; ctx.shadowBlur = 25;
-        ctx.fillStyle = `rgba(255,200,50,${intensity})`;
-        ctx.beginPath(); ctx.arc(mfX, mfY, 20+Math.random()*12, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = `rgba(255,255,200,${intensity})`;
-        ctx.beginPath(); ctx.arc(mfX, mfY, 10, 0, Math.PI*2); ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = `rgba(255,150,30,${intensity*0.6})`;
-        ctx.lineWidth = 2;
-        for(let i=0;i<7;i++){
-            const a = Math.random()*Math.PI*2, r = 20+Math.random()*20;
-            ctx.beginPath(); ctx.moveTo(mfX,mfY);
-            ctx.lineTo(mfX+Math.cos(a)*r, mfY+Math.sin(a)*r); ctx.stroke();
-        }
-        ctx.restore();
-    }
-
-
-    ctx.restore();
-
-    // F키 근접공격 이펙트
-    if(player.meleeActive && wpnIdx !== 5) {
-        ctx.save();
-        const swP = 1 - player.meleeTime/12;
-        const swA = swP * Math.PI * 0.8 - 0.4;
-        ctx.translate(W/2 + 80, H/2 - 30);
-        ctx.rotate(swA - 0.5);
-        ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 15;
-        ctx.strokeStyle = `rgba(204,68,255,${1-swP})`;
-        ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(40,-40,55,-75); ctx.stroke();
-        ctx.strokeStyle = `rgba(204,68,255,${0.6-swP*0.6})`;
+        ctx.translate(W/2, H/2);
+        ctx.rotate(-Math.PI/4 + prog * Math.PI * 0.7);
+        ctx.strokeStyle = `rgba(255,220,100,${0.7 - prog*0.5})`;
+        ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 20;
         ctx.lineWidth = 8;
-        ctx.beginPath(); ctx.arc(0,-35,60,-Math.PI*0.3,Math.PI*0.3); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -35, 60, -Math.PI*0.3, Math.PI*0.3); ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.restore();
     }
 }
+
+// drawWeaponModel 제거됨 - renderWeapon3D()로 완전 교체
+function drawWeaponModel() { return; }
 
 function drawTitle() {
     // BG
