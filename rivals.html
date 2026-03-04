@@ -2801,7 +2801,7 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
         arms: {
-            left:  { pos: [0.10, 0.0, 0], rot: [0.35, 0, 0] }
+            left:  { pos: [0.10, -0.05, 0], rot: [0.65, 0, 0] }
         }
     },
     { // 특수소총 (배럴 LOCAL Z축)
@@ -2811,7 +2811,7 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
         arms: {
-            left:  { pos: [0, 0.0, -0.10], rot: [0, 0, -0.35] }
+            left:  { pos: [0, -0.05, -0.10], rot: [0, 0, -0.65] }
         }
     },
     { // 스나이퍼 (배럴 LOCAL Z축)
@@ -2821,7 +2821,7 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.25, -0.14, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.35),
         arms: {
-            left:  { pos: [0, 0.0, -0.13], rot: [0, 0, -0.35] }
+            left:  { pos: [0, -0.05, -0.13], rot: [0, 0, -0.65] }
         }
     }
 ];
@@ -2842,12 +2842,12 @@ function buildRobloxArm() {
     hand.position.set(0, -0.015, 0);
     arm.add(hand);
 
-    // 다크 슬리브 블록 (아래쪽, 길게)
+    // 다크 슬리브 블록 (아래쪽, 화면 아래에서 올라오도록 길게)
     const sleeve = new THREE.Mesh(
-        new THREE.BoxGeometry(0.058, 0.32, 0.058),
+        new THREE.BoxGeometry(0.06, 0.55, 0.06),
         _sleeveMat
     );
-    sleeve.position.set(0, -0.21, 0);
+    sleeve.position.set(0, -0.32, 0);
     arm.add(sleeve);
 
     return arm;
