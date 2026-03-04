@@ -2800,8 +2800,8 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI/2, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
-        // 왼팔=탄창, 오른팔=피스톨그립(뒤쪽)
-        leftArm:  { pos: [-0.01, -0.08, -0.04], angle: 0.15 },
+        // 왼팔=탄창(수직 그립), 오른팔=피스톨그립(뒤쪽)
+        leftArm:  { pos: [-0.01, -0.08, -0.04], angle: 0.10, tilt: -0.15 },
         rightArm: { pos: [ 0.01, -0.06,  0.10], angle: -0.35 }
     },
     { // 특수소총 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
@@ -2918,8 +2918,9 @@ function attachArmsToWeapon(wrapper, wpnIdx) {
 
     function addArm(armCfg, isLeft) {
         const arm = buildFPSArm(isLeft);
-        // X: 앞으로 기울기, Z: 좌우 기울기
-        arm.rotation.set(-0.6, 0, armCfg.angle || 0);
+        // X: 앞으로 기울기(tilt), Z: 좌우 기울기(angle)
+        const tilt = armCfg.tilt !== undefined ? armCfg.tilt : -0.6;
+        arm.rotation.set(tilt, 0, armCfg.angle || 0);
         arm.position.set(armCfg.pos[0], armCfg.pos[1], armCfg.pos[2]);
         wrapper.add(arm);
         return arm;
