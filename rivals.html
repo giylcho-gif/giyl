@@ -2800,9 +2800,7 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI/2, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
-        // 왼팔=탄창(수직 그립), 오른팔=피스톨그립(뒤쪽)
-        leftArm:  { pos: [-0.01, -0.08, -0.04], angle: 0.10, tilt: -0.15 },
-        rightArm: { pos: [ 0.01, -0.06,  0.10], angle: -0.35 }
+        arms: { scale: 0.0025, pos: [0.05, -0.06, -0.30], rot: [0, Math.PI, 0] }
     },
     { // 특수소총 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
         path: 'models/gun.glb',
@@ -2810,8 +2808,7 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.32),
-        leftArm:  { pos: [ 0.01, -0.06, -0.10], angle: 0.20 },
-        rightArm: { pos: [ 0.01, -0.06,  0.08], angle: -0.35 }
+        arms: { scale: 0.0025, pos: [0.05, -0.06, -0.30], rot: [0, Math.PI, 0] }
     },
     { // 스나이퍼 (배럴이 Z축 방향 → PI Y회전으로 -Z 방향)
         path: 'models/sniper.glb',
@@ -2819,141 +2816,81 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.25, -0.14, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.10, -0.35),
-        leftArm:  { pos: [ 0.01, -0.06, -0.15], angle: 0.20 },
-        rightArm: { pos: [ 0.01, -0.06,  0.10], angle: -0.35 }
+        arms: { scale: 0.0025, pos: [0.05, -0.06, -0.30], rot: [0, Math.PI, 0] }
     }
 ];
 let weaponModelsLoaded = false;
 
-// FPS 팔 프리미티브 시스템
-const armSkinMat = new THREE.MeshStandardMaterial({ color: 0xc9956b, roughness: 0.8, metalness: 0.0 });
-const armSleeveMat = new THREE.MeshStandardMaterial({ color: 0x3d4a2e, roughness: 0.9, metalness: 0.0 });
-const armGloveMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.05 });
-const gloveDetailMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.5, metalness: 0.05 });
+// FPS 팔 GLB 모델 시스템
+let fpsArmsModel = null; // 로드된 GLB 모델 캐시
 
-// 둥근 손가락 마디
-function makeFingerSeg(radius, length, mat) {
-    const g = new THREE.Group();
-    // 실린더 (둥근 손가락)
-    const cyl = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius, radius * 0.9, length, 8), mat);
-    cyl.position.y = length / 2;
-    g.add(cyl);
-    // 관절 구 (둥근 연결부)
-    const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 6, 6), mat);
-    sphere.position.y = length;
-    g.add(sphere);
-    return g;
+// FPS 팔 본 포즈 - 무기 그립 자세
+function poseFPSArmBones(model) {
+    const bones = {};
+    model.traverse(child => { if (child.isBone) bones[child.name] = child; });
+
+    // L arm (PI flip 후 오른쪽) - 핸드가드 그립
+    if (bones.L_arm_01) bones.L_arm_01.rotation.set(0.2, 1.5, -1.5);
+    if (bones.L_elbow_02) bones.L_elbow_02.rotation.set(0.3, 0.4, -0.2);
+    if (bones.L_wrist_03) bones.L_wrist_03.rotation.set(0.6, 0.2, 0.2);
+
+    // R arm (PI flip 후 왼쪽) - 피스톨 그립
+    if (bones.R_arm_023) bones.R_arm_023.rotation.set(-0.2, -1.5, 1.5);
+    if (bones.R_elbow_024) bones.R_elbow_024.rotation.set(-0.3, -0.4, 0.2);
+    if (bones.R_wrist_025) bones.R_wrist_025.rotation.set(-0.6, -0.2, -0.2);
+
+    // 손가락 구부리기 (그립 자세)
+    model.traverse(child => {
+        if (!child.isBone) return;
+        const n = child.name;
+        const isL = n.startsWith('L');
+        const sign = isL ? 1 : -1;
+        if (n.includes('point') || n.includes('middle') || n.includes('ring') || n.includes('pink')) {
+            if (n.includes('1_0')) child.rotation.x = sign * 0.7;
+            else if (n.includes('2_0')) child.rotation.x = sign * 1.1;
+            else if (n.includes('3_0')) child.rotation.x = sign * 0.9;
+            else if (n.includes('4_0')) child.rotation.x = sign * 0.5;
+        }
+        if (n.includes('thumb')) {
+            if (n.includes('2_0')) child.rotation.z = sign * 0.6;
+            if (n.includes('3_0')) child.rotation.x = sign * 0.7;
+        }
+    });
 }
 
-// 팔 하나 생성 - 둥근 손가락 그립
-function buildFPSArm(isLeft) {
-    const group = new THREE.Group();
-    const side = isLeft ? 1 : -1;
-
-    // 소매 (팔뚝)
-    const sleeve = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.032, 0.038, 0.28, 8), armSleeveMat);
-    sleeve.position.set(0, -0.14, 0);
-    group.add(sleeve);
-
-    // 소매 끝단
-    const cuff = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.036, 0.034, 0.025, 8), armSleeveMat);
-    cuff.position.set(0, 0.01, 0);
-    group.add(cuff);
-
-    // 손목 (피부)
-    const wrist = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.028, 0.032, 0.035, 8), armSkinMat);
-    wrist.position.set(0, 0.035, 0);
-    group.add(wrist);
-
-    // 핸드 그룹
-    const handGroup = new THREE.Group();
-    handGroup.position.set(0, 0.05, 0);
-    handGroup.rotation.x = -0.95;
-
-    // 손바닥 - 둥글고 두툼하게
-    const palm = new THREE.Mesh(
-        new THREE.BoxGeometry(0.060, 0.040, 0.035), armGloveMat);
-    palm.position.set(0, 0.008, 0.008);
-    // 모서리를 둥글게 하기 위해 약간의 스케일 조정은 어렵지만 두께로 보완
-    handGroup.add(palm);
-    // 손바닥 아래쪽 볼록
-    const palmPad = new THREE.Mesh(
-        new THREE.SphereGeometry(0.022, 8, 6), armGloveMat);
-    palmPad.scale.set(1.3, 0.8, 0.8);
-    palmPad.position.set(0, 0.015, -0.005);
-    handGroup.add(palmPad);
-
-    // 너클 라인
-    const knuckle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.006, 0.006, 0.055, 6), gloveDetailMat);
-    knuckle.rotation.z = Math.PI / 2;
-    knuckle.position.set(0, 0.030, 0.012);
-    handGroup.add(knuckle);
-
-    // 손가락 4개 - 둥근 실린더 2마디
-    const fingerX = [-0.019, -0.007, 0.007, 0.019];
-    const fingerR = [0.006, 0.007, 0.0065, 0.0055]; // 검지~소지 굵기
-    const fingerL = [0.028, 0.032, 0.030, 0.024];    // 길이
-    for (let i = 0; i < 4; i++) {
-        const r = fingerR[i];
-        const len = fingerL[i];
-        // 첫째 마디
-        const seg1 = makeFingerSeg(r, len * 0.5, armGloveMat);
-        seg1.position.set(fingerX[i], 0.030, 0.005);
-        handGroup.add(seg1);
-        // 둘째 마디 (구부러짐)
-        const joint = new THREE.Group();
-        joint.position.set(fingerX[i], 0.030 + len * 0.5, 0.005);
-        joint.rotation.x = 1.4; // 강하게 구부림
-        const seg2 = makeFingerSeg(r * 0.9, len * 0.45, gloveDetailMat);
-        joint.add(seg2);
-        handGroup.add(joint);
-    }
-
-    // 엄지 - 둥근 실린더
-    const thumbG = new THREE.Group();
-    thumbG.position.set(side * 0.032, 0.005, 0.015);
-    thumbG.rotation.z = side * 0.5;
-    thumbG.rotation.x = -0.2;
-    const tb = makeFingerSeg(0.007, 0.022, armGloveMat);
-    thumbG.add(tb);
-    const thumbJ = new THREE.Group();
-    thumbJ.position.set(0, 0.022, 0);
-    thumbJ.rotation.x = 0.4;
-    const tt = makeFingerSeg(0.006, 0.018, gloveDetailMat);
-    thumbJ.add(tt);
-    thumbG.add(thumbJ);
-    handGroup.add(thumbG);
-
-    group.add(handGroup);
-    return group;
-}
-
+// GLB 팔 모델 로드 & 부착 (각 무기마다 별도 로드 - SkinnedMesh 클론 문제 방지)
 function attachArmsToWeapon(wrapper, wpnIdx) {
     if (wrapper.userData.armsAttached) return;
     const cfg = weaponModelConfigs[wpnIdx];
-    if (!cfg) return;
-
-    function addArm(armCfg, isLeft) {
-        const arm = buildFPSArm(isLeft);
-        // X: 앞으로 기울기(tilt), Z: 좌우 기울기(angle)
-        const tilt = armCfg.tilt !== undefined ? armCfg.tilt : -0.6;
-        arm.rotation.set(tilt, 0, armCfg.angle || 0);
-        arm.position.set(armCfg.pos[0], armCfg.pos[1], armCfg.pos[2]);
-        wrapper.add(arm);
-        return arm;
-    }
-
-    if (cfg.leftArm) wrapper.userData.leftArm = addArm(cfg.leftArm, true);
-    if (cfg.rightArm) wrapper.userData.rightArm = addArm(cfg.rightArm, false);
-
+    if (!cfg || !cfg.arms) return;
     wrapper.userData.armsAttached = true;
-    console.log(`[3D] FPS Arms 부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
+
+    gltfLoader.load('models/fps_arms_gloved.glb', (gltf) => {
+        const model = gltf.scene;
+
+        // 재질 최적화 - 환경맵 없이 잘 보이게
+        model.traverse(child => {
+            if (child.isMesh && child.material) {
+                child.material.metalness = 0.1;
+                child.material.roughness = 0.6;
+                child.material.envMap = null;
+                child.material.needsUpdate = true;
+            }
+        });
+
+        // 본 포즈 적용 (무기 그립 자세)
+        poseFPSArmBones(model);
+
+        const armsCfg = cfg.arms;
+        model.scale.setScalar(armsCfg.scale);
+        model.position.set(armsCfg.pos[0], armsCfg.pos[1], armsCfg.pos[2]);
+        model.rotation.set(armsCfg.rot[0], armsCfg.rot[1], armsCfg.rot[2]);
+        wrapper.add(model);
+        wrapper.userData.armsModel = model;
+        console.log(`[3D] GLB Arms 로드+부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
+    },
+    undefined,
+    (err) => console.error('[3D] GLB Arms 로드 실패:', err));
 }
 
 // GLB 무기 모델 로드
