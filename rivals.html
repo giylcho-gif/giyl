@@ -2967,11 +2967,11 @@ function initWeapon3DModels() {
                 }
             });
 
-            // 재질 최적화: 환경맵 없이도 잘 보이게
+            // 재질 최적화: 금속성 제거 → 회색 없앰, 텍스처 색상만 표시
             model.traverse(child => {
                 if (child.isMesh && child.material) {
-                    child.material.metalness = Math.min(child.material.metalness || 0, 0.3);
-                    child.material.roughness = Math.max(child.material.roughness || 1, 0.5);
+                    child.material.metalness = 0;
+                    child.material.roughness = 0.75;
                     child.material.needsUpdate = true;
                 }
             });
