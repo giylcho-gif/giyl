@@ -2831,7 +2831,23 @@ const armSleeveMat = new THREE.MeshStandardMaterial({ color: 0x3d4a2e, roughness
 const armGloveMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.05 });
 const gloveDetailMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.5, metalness: 0.05 });
 
-// 팔 하나 생성 - 손가락이 보이는 그립
+// 둥근 손가락 마디
+function makeFingerSeg(radius, length, mat) {
+    const g = new THREE.Group();
+    // 실린더 (둥근 손가락)
+    const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius * 0.9, length, 8), mat);
+    cyl.position.y = length / 2;
+    g.add(cyl);
+    // 관절 구 (둥근 연결부)
+    const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 6, 6), mat);
+    sphere.position.y = length;
+    g.add(sphere);
+    return g;
+}
+
+// 팔 하나 생성 - 둥근 손가락 그립
 function buildFPSArm(isLeft) {
     const group = new THREE.Group();
     const side = isLeft ? 1 : -1;
@@ -2850,7 +2866,7 @@ function buildFPSArm(isLeft) {
 
     // 손목 (피부)
     const wrist = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.028, 0.030, 0.03, 8), armSkinMat);
+        new THREE.CylinderGeometry(0.028, 0.032, 0.035, 8), armSkinMat);
     wrist.position.set(0, 0.035, 0);
     group.add(wrist);
 
@@ -2859,43 +2875,60 @@ function buildFPSArm(isLeft) {
     handGroup.position.set(0, 0.05, 0);
     handGroup.rotation.x = -0.95;
 
-    // 손등
+    // 손바닥 - 둥글고 두툼하게
     const palm = new THREE.Mesh(
-        new THREE.BoxGeometry(0.055, 0.045, 0.018), armGloveMat);
-    palm.position.set(0, 0.01, 0.012);
+        new THREE.BoxGeometry(0.060, 0.040, 0.035), armGloveMat);
+    palm.position.set(0, 0.008, 0.008);
+    // 모서리를 둥글게 하기 위해 약간의 스케일 조정은 어렵지만 두께로 보완
     handGroup.add(palm);
+    // 손바닥 아래쪽 볼록
+    const palmPad = new THREE.Mesh(
+        new THREE.SphereGeometry(0.022, 8, 6), armGloveMat);
+    palmPad.scale.set(1.3, 0.8, 0.8);
+    palmPad.position.set(0, 0.015, -0.005);
+    handGroup.add(palmPad);
 
-    // 손가락 4개 - 간단한 2마디
-    const fingerX = [-0.018, -0.006, 0.006, 0.018];
-    const fingerLen = [0.032, 0.036, 0.034, 0.028];
+    // 너클 라인
+    const knuckle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.006, 0.006, 0.055, 6), gloveDetailMat);
+    knuckle.rotation.z = Math.PI / 2;
+    knuckle.position.set(0, 0.030, 0.012);
+    handGroup.add(knuckle);
+
+    // 손가락 4개 - 둥근 실린더 2마디
+    const fingerX = [-0.019, -0.007, 0.007, 0.019];
+    const fingerR = [0.006, 0.007, 0.0065, 0.0055]; // 검지~소지 굵기
+    const fingerL = [0.028, 0.032, 0.030, 0.024];    // 길이
     for (let i = 0; i < 4; i++) {
+        const r = fingerR[i];
+        const len = fingerL[i];
         // 첫째 마디
-        const seg1 = new THREE.Mesh(
-            new THREE.BoxGeometry(0.011, fingerLen[i] * 0.55, 0.012), armGloveMat);
-        seg1.position.set(fingerX[i], 0.035 + fingerLen[i] * 0.25, 0.005);
+        const seg1 = makeFingerSeg(r, len * 0.5, armGloveMat);
+        seg1.position.set(fingerX[i], 0.030, 0.005);
         handGroup.add(seg1);
         // 둘째 마디 (구부러짐)
         const joint = new THREE.Group();
-        joint.position.set(fingerX[i], 0.035 + fingerLen[i] * 0.55, 0.005);
-        joint.rotation.x = 1.3; // 강하게 구부림
-        const seg2 = new THREE.Mesh(
-            new THREE.BoxGeometry(0.010, fingerLen[i] * 0.45, 0.011), gloveDetailMat);
-        seg2.position.set(0, fingerLen[i] * 0.2, 0);
+        joint.position.set(fingerX[i], 0.030 + len * 0.5, 0.005);
+        joint.rotation.x = 1.4; // 강하게 구부림
+        const seg2 = makeFingerSeg(r * 0.9, len * 0.45, gloveDetailMat);
         joint.add(seg2);
         handGroup.add(joint);
     }
 
-    // 엄지
-    const thumb = new THREE.Mesh(
-        new THREE.BoxGeometry(0.013, 0.030, 0.014), armGloveMat);
-    thumb.position.set(side * 0.032, 0.015, 0.015);
-    thumb.rotation.z = side * 0.4;
-    handGroup.add(thumb);
-    const thumbTip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.011, 0.020, 0.012), gloveDetailMat);
-    thumbTip.position.set(side * 0.038, 0.035, 0.015);
-    thumbTip.rotation.z = side * 0.5;
-    handGroup.add(thumbTip);
+    // 엄지 - 둥근 실린더
+    const thumbG = new THREE.Group();
+    thumbG.position.set(side * 0.032, 0.005, 0.015);
+    thumbG.rotation.z = side * 0.5;
+    thumbG.rotation.x = -0.2;
+    const tb = makeFingerSeg(0.007, 0.022, armGloveMat);
+    thumbG.add(tb);
+    const thumbJ = new THREE.Group();
+    thumbJ.position.set(0, 0.022, 0);
+    thumbJ.rotation.x = 0.4;
+    const tt = makeFingerSeg(0.006, 0.018, gloveDetailMat);
+    thumbJ.add(tt);
+    thumbG.add(thumbJ);
+    handGroup.add(thumbG);
 
     group.add(handGroup);
     return group;
