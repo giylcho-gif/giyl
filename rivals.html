@@ -3006,13 +3006,15 @@ function renderWeapon3D() {
         weaponScene.add(currentWeapon3D);
     }
 
-    // 스나이퍼 ADS: 3D 모델 숨김 (2D 스코프 오버레이로 대체)
+    // 스나이퍼 ADS: 3D 모델 완전 제거 (2D 스코프 오버레이로 대체)
     if (wpnIdx === 2 && player.scope) {
-        currentWeapon3D.visible = false;
-        weaponRenderer.clear();
+        weaponScene.remove(currentWeapon3D);
+        weaponRenderer.clear(true, true, true);
         return;
-    } else if (currentWeapon3D) {
-        currentWeapon3D.visible = true;
+    } else {
+        if (currentWeapon3D && !weaponScene.children.includes(currentWeapon3D)) {
+            weaponScene.add(currentWeapon3D);
+        }
     }
 
     // 애니메이션 계산
