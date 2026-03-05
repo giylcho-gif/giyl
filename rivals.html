@@ -762,14 +762,14 @@ const player = {
 // ====== WEAPONS ======
 const weapons = [
     { name:'AK-47', damage:18, fireRate:6, reloadSpeed:90, spread:0.015, auto:true, range:300, color:'#ff6b35', ammoName:'7.62mm', icon:'▄█▀', sound:'rifle', model:'models/ak47.glb' },
-    { name:'특수소총', damage:25, fireRate:8, reloadSpeed:75, spread:0.012, auto:true, range:350, color:'#00ccff', ammoName:'5.56mm', icon:'━▄█', sound:'rifle', model:'models/gun.glb' },
+    null, // 특수소총 제거됨
     { name:'스나이퍼', damage:90, fireRate:50, reloadSpeed:120, spread:0.002, auto:false, range:500, color:'#44ff88', ammoName:'.308', icon:'━━▄', sound:'sniper', scope:true, model:'models/sniper.glb' }
 ];
 
 // ====== CLASSES ======
 const classes = [
     { name:'돌격병', desc:'AK-47 + 빠른 이동', weapon:0, hp:100, armor:0, speed:2.5, color:'#ff6b35', ability:'대시', abilityCooldown:180 },
-    { name:'특수부대', desc:'특수소총 + 높은 화력', weapon:1, hp:120, armor:25, speed:2.2, color:'#00ccff', ability:'보호막', abilityCooldown:240 },
+    { name:'특수부대', desc:'AK-47 + 높은 화력', weapon:0, hp:120, armor:25, speed:2.2, color:'#00ccff', ability:'보호막', abilityCooldown:240 },
     { name:'저격수', desc:'스나이퍼 + 스코프', weapon:2, hp:80, armor:0, speed:2.0, color:'#44ff88', ability:'투명화', abilityCooldown:360 }
 ];
 
@@ -2801,30 +2801,16 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI/2, 0),
         idlePos: new THREE.Vector3(0.18, -0.18, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.38),
-        arms: {
-            left:  { pos: [0.08, 0.0, 0], rot: [0.25, 0, -0.75] }
-        }
+        hasArm: true
     },
-    { // 특수소총 (배럴 LOCAL Z축)
-        path: 'models/gun.glb',
-        scale: 0.012,
-        rotOffset: new THREE.Euler(0, Math.PI, 0),
-        idlePos: new THREE.Vector3(0.18, -0.18, -0.35),
-        adsPos: new THREE.Vector3(0.0, -0.12, -0.38),
-        hideMaterials: ['Material__180'], // 회색 래핑 제거
-        arms: {
-            left:  { pos: [0.08, 0.0, 0], rot: [0.25, 0, -0.75] }
-        }
-    },
+    null, // 특수소총 제거됨
     { // 스나이퍼 (배럴 LOCAL Z축)
         path: 'models/sniper.glb',
         scale: 0.010,
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.18, -0.18, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.40),
-        arms: {
-            left:  { pos: [0.08, 0.0, 0], rot: [0.25, 0, -0.75] }
-        }
+        hasArm: true
     }
 ];
 let weaponModelsLoaded = false;
@@ -2872,20 +2858,30 @@ function buildRobloxArm() {
     return arm;
 }
 
+// 카메라 공간 팔 설정 (AK-47 기준으로 정의, 모든 무기에 동일 적용)
+const _akWrapQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI/2, 0));
+const _akArmPos = new THREE.Vector3(0.08, 0.0, 0);
+const _akArmQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0, -0.75));
+// AK-47 로컬 → 카메라 공간으로 변환
+const ARM_CAM_POS = _akArmPos.clone().applyQuaternion(_akWrapQuat);
+const ARM_CAM_QUAT = _akWrapQuat.clone().multiply(_akArmQuat);
+
 function attachArmsToWeapon(wrapper, wpnIdx) {
     if (wrapper.userData.armsAttached) return;
     const cfg = weaponModelConfigs[wpnIdx];
-    if (!cfg || !cfg.arms) return;
+    if (!cfg || !cfg.hasArm) return;
     wrapper.userData.armsAttached = true;
 
-    // 왼팔만 부착
     const leftArm = buildRobloxArm();
-    leftArm.position.set(cfg.arms.left.pos[0], cfg.arms.left.pos[1], cfg.arms.left.pos[2]);
-    leftArm.rotation.set(cfg.arms.left.rot[0], cfg.arms.left.rot[1], cfg.arms.left.rot[2]);
-    wrapper.add(leftArm);
 
+    // 카메라 공간 → 이 무기의 wrapper 로컬 공간으로 역변환
+    const invQuat = new THREE.Quaternion().setFromEuler(cfg.rotOffset).invert();
+    leftArm.position.copy(ARM_CAM_POS.clone().applyQuaternion(invQuat));
+    leftArm.quaternion.copy(invQuat.clone().multiply(ARM_CAM_QUAT));
+
+    wrapper.add(leftArm);
     wrapper.userData.leftHand = leftArm;
-    console.log(`[3D] 로블록스 왼팔 부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
+    console.log(`[3D] 왼팔 부착: ${weapons[wpnIdx]?.name || wpnIdx}`);
 }
 
 // GLB 무기 모델 로드
@@ -2894,6 +2890,7 @@ function initWeapon3DModels() {
     weaponModelsLoaded = true;
 
     weaponModelConfigs.forEach((cfg, idx) => {
+        if (!cfg) return; // 제거된 무기 스킵
         gltfLoader.load(cfg.path, (gltf) => {
             const model = gltf.scene;
             model.scale.setScalar(cfg.scale);
