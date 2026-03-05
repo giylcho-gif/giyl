@@ -77,7 +77,8 @@ canvas {
 </head>
 <body>
 <div id="canvasContainer" style="position:relative;display:inline-flex;">
-<canvas id="c"></canvas>
+<canvas id="mapCanvas" style="position:absolute;top:0;left:0;border-radius:8px;"></canvas>
+<canvas id="c" style="position:relative;"></canvas>
 <canvas id="weaponCanvas" style="position:absolute;top:0;left:0;pointer-events:none;border-radius:8px;"></canvas>
 </div>
 <div id="fpsControls">
@@ -146,14 +147,93 @@ weaponScene.add(muzzleFlashLight);
 const weaponModels3D = [];
 let currentWeapon3D = null;
 
+// ====== THREE.JS 3D 맵 시스템 ======
+const mapCanvas = document.getElementById('mapCanvas');
+mapCanvas.width = W; mapCanvas.height = H;
+
+const mapRenderer = new THREE.WebGLRenderer({ canvas: mapCanvas, antialias: true });
+mapRenderer.setSize(W, H);
+mapRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+mapRenderer.shadowMap.enabled = false;
+
+const mapScene = new THREE.Scene();
+mapScene.background = new THREE.Color(0x4a5568); // 하늘색
+mapScene.fog = new THREE.Fog(0x6a7585, 200, 600);
+
+const mapCamera = new THREE.PerspectiveCamera(75, W / H, 0.5, 1000);
+
+// 맵 조명
+const mapDirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+mapDirLight.position.set(50, 100, 50);
+mapScene.add(mapDirLight);
+const mapAmbient = new THREE.AmbientLight(0x8899aa, 0.6);
+mapScene.add(mapAmbient);
+
+// GLB 맵 모델 로드
+let mapModel = null;
+const mapLoader = new THREE.GLTFLoader();
+mapLoader.load('models/fps_map_pvp_pve_game_neon.glb', (gltf) => {
+    mapModel = gltf.scene;
+    // 맵 스케일 조정 (GLB 맵을 게임 좌표계에 맞추기)
+    mapModel.scale.set(1, 1, 1);
+    mapModel.position.set(0, 0, 0);
+    mapScene.add(mapModel);
+
+    // 바운딩 박스로 맵 크기 파악
+    const box = new THREE.Box3().setFromObject(mapModel);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    console.log(`[3D맵] 로드 완료 - 크기: ${size.x.toFixed(1)} x ${size.y.toFixed(1)} x ${size.z.toFixed(1)}, 중심: ${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}`);
+
+    // 게임 MAP_SIZE(280)에 맞게 스케일링
+    const maxDim = Math.max(size.x, size.z);
+    if (maxDim > 0) {
+        const targetSize = 560; // MAP_SIZE * 2
+        const sc = targetSize / maxDim;
+        mapModel.scale.set(sc, sc, sc);
+        // 중심을 원점으로
+        mapModel.position.set(-center.x * sc, -box.min.y * sc, -center.z * sc);
+        console.log(`[3D맵] 스케일: ${sc.toFixed(3)}`);
+    }
+}, undefined, (err) => console.error('[3D맵] 로드 실패:', err));
+
+// 3D 맵 카메라 동기화 (매 프레임)
+function syncMapCamera() {
+    const camH = player.sliding ? 4 : 10;
+    mapCamera.position.set(player.x, player.y + camH, player.z);
+
+    // yaw/pitch를 Three.js 회전으로 변환
+    // 게임: yaw=0은 +Z 방향, Three.js는 -Z가 기본 forward → PI 오프셋
+    // 게임: pitch 양수 = 위를 봄, Three.js: X양수 = 아래를 봄 → 부호 반전
+    const euler = new THREE.Euler(-pitch, yaw + Math.PI, 0, 'YXZ');
+    mapCamera.quaternion.setFromEuler(euler);
+
+    // FOV 동기화 (스코프 줌)
+    const gameFov = player.scope ? (player.weapon === 2 ? 800 : 550) : 400;
+    // 게임 FOV를 Three.js FOV로 변환: atan(H/2 / fov) * 2
+    const threeFov = 2 * Math.atan((H / 2) / gameFov) * (180 / Math.PI);
+    mapCamera.fov = threeFov;
+    mapCamera.updateProjectionMatrix();
+}
+
+function renderMap3D() {
+    if (gameState !== 'playing' && gameState !== 'dead' && gameState !== 'scoreboard') {
+        return;
+    }
+    syncMapCamera();
+    mapRenderer.render(mapScene, mapCamera);
+}
+
 // 오버레이 캔버스 크기 동기화
-const syncWeaponCanvas = () => {
+const syncCanvases = () => {
     const r = canvas.getBoundingClientRect();
     weaponCanvas.style.width = r.width + 'px';
     weaponCanvas.style.height = r.height + 'px';
+    mapCanvas.style.width = r.width + 'px';
+    mapCanvas.style.height = r.height + 'px';
 };
-window.addEventListener('resize', syncWeaponCanvas);
-setTimeout(syncWeaponCanvas, 100);
+window.addEventListener('resize', syncCanvases);
+setTimeout(syncCanvases, 100);
 
 // ====== SOUND SYSTEM (미리 캐시된 버퍼 방식) ======
 let audioCtx = null;
@@ -1950,46 +2030,8 @@ for(let i = 0; i < 60; i++) {
 }
 
 function drawGround() {
-    // 겨울 하늘 — 흐리고 무거운 구름
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#4a5568');
-    sky.addColorStop(0.3, '#6a7585');
-    sky.addColorStop(0.5, '#8a95a0');
-    sky.addColorStop(0.7, '#9aa5ae');
-    sky.addColorStop(1, '#b0b8c0');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
-
-    // 지평선 — 눈 덮인 바닥
-    const horizonY = H/2 - Math.sin(pitch) * 400;
-    const groundGrad = ctx.createLinearGradient(0, horizonY, 0, H);
-    groundGrad.addColorStop(0, '#c8cdd2');
-    groundGrad.addColorStop(0.2, '#b8bec5');
-    groundGrad.addColorStop(0.5, '#a8aeb5');
-    groundGrad.addColorStop(1, '#909aa2');
-    ctx.fillStyle = groundGrad;
-    ctx.fillRect(0, horizonY, W, H);
-
-    // 바닥 그리드 (눈 위 발자국/타이어 자국 느낌)
-    ctx.strokeStyle = 'rgba(130,140,150,0.1)';
-    ctx.lineWidth = 1;
-    const gridSize = 50;
-    for(let gx = -MAP_SIZE; gx <= MAP_SIZE; gx += gridSize) {
-        const p1 = project(gx, 0, -MAP_SIZE);
-        const p2 = project(gx, 0, MAP_SIZE);
-        if(p1 && p2) {
-            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-        }
-    }
-    for(let gz = -MAP_SIZE; gz <= MAP_SIZE; gz += gridSize) {
-        const p1 = project(-MAP_SIZE, 0, gz);
-        const p2 = project(MAP_SIZE, 0, gz);
-        if(p1 && p2) {
-            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-        }
-    }
-
-    // 눈 내리는 이펙트
+    // 3D 맵이 배경을 담당하므로 2D 캔버스는 투명하게 유지
+    // 눈 내리는 이펙트만 유지
     ctx.fillStyle = 'rgba(230,235,240,0.6)';
     for(const sf of snowflakes) {
         sf.y += sf.sp;
@@ -3889,15 +3931,13 @@ function render() {
     else if(gameState === 'classSelect') { drawClassSelect(); }
     else if(gameState === 'skinSelect') { drawSkinSelect(); }
     else {
+        // 3D 맵 렌더링
+        renderMap3D();
+
         drawGround();
 
-        // Unified depth sorting: walls + enemies together
+        // 적만 렌더링 (벽은 3D 맵이 담당, 충돌용 walls[]는 유지)
         const renderables = [];
-        walls.forEach(w => {
-            const cx = w.x + w.w/2 - player.x;
-            const cz = w.z + w.d/2 - player.z;
-            renderables.push({type:'wall', data:{...w, dist:cx*cx+cz*cz}, dist:cx*cx+cz*cz});
-        });
         enemies.filter(e => e.hp > 0).forEach(e => {
             const dx = e.x - player.x, dz = e.z - player.z;
             const d = dx*dx + dz*dz;
@@ -3909,7 +3949,7 @@ function render() {
             renderables.push({type:'enemy', data:{...remotePlayer, class:remotePlayer.selectedClass, dist:rDist, ref:remotePlayer}, dist:rDist});
         }
         renderables.sort((a,b) => b.dist - a.dist);
-        renderables.forEach(r => r.type==='wall' ? drawWall(r.data) : drawEnemy(r.data));
+        renderables.forEach(r => drawEnemy(r.data));
 
         // Draw bullets
         bullets.forEach(b => {
