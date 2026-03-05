@@ -156,20 +156,25 @@ mapRenderer.setSize(W, H);
 mapRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 mapRenderer.shadowMap.enabled = false;
 mapRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-mapRenderer.toneMappingExposure = 1.5;
+mapRenderer.toneMappingExposure = 2.0;
 
 const mapScene = new THREE.Scene();
-mapScene.background = new THREE.Color(0x050510); // 어두운 배경 (네온 맵용)
-mapScene.fog = new THREE.FogExp2(0x050510, 0.002); // 부드러운 안개
+mapScene.background = new THREE.Color(0x87CEEB); // 밝은 하늘색
+mapScene.fog = new THREE.Fog(0x87CEEB, 600, 2000); // 밝은 안개
 
 const mapCamera = new THREE.PerspectiveCamera(75, W / H, 0.5, 2000);
 
-// 맵 조명
-const mapDirLight = new THREE.DirectionalLight(0x4466aa, 0.3);
-mapDirLight.position.set(50, 100, 50);
+// 맵 조명 - 매우 밝게
+const mapDirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+mapDirLight.position.set(100, 200, 100);
 mapScene.add(mapDirLight);
-const mapAmbient = new THREE.AmbientLight(0x223344, 0.4);
+const mapDirLight2 = new THREE.DirectionalLight(0xffeedd, 1.0);
+mapDirLight2.position.set(-100, 150, -50);
+mapScene.add(mapDirLight2);
+const mapAmbient = new THREE.AmbientLight(0xffffff, 1.2);
 mapScene.add(mapAmbient);
+const mapHemi = new THREE.HemisphereLight(0x87CEEB, 0xB97A20, 0.8);
+mapScene.add(mapHemi);
 
 // GLB 맵 모델 로드
 let mapModel = null;
