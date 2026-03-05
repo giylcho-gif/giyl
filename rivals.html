@@ -2810,7 +2810,8 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.18, -0.18, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.40),
-        hasArm: true
+        hasArm: true,
+        armCamOffset: new THREE.Vector3(-0.12, 0, 0) // 카메라 공간에서 왼쪽으로 이동
     }
 ];
 let weaponModelsLoaded = false;
@@ -2876,7 +2877,9 @@ function attachArmsToWeapon(wrapper, wpnIdx) {
 
     // 카메라 공간 → 이 무기의 wrapper 로컬 공간으로 역변환
     const invQuat = new THREE.Quaternion().setFromEuler(cfg.rotOffset).invert();
-    leftArm.position.copy(ARM_CAM_POS.clone().applyQuaternion(invQuat));
+    const camPos = ARM_CAM_POS.clone();
+    if (cfg.armCamOffset) camPos.add(cfg.armCamOffset); // 무기별 카메라 공간 오프셋
+    leftArm.position.copy(camPos.applyQuaternion(invQuat));
     leftArm.quaternion.copy(invQuat.clone().multiply(ARM_CAM_QUAT));
 
     wrapper.add(leftArm);
