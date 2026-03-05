@@ -2502,17 +2502,53 @@ function drawHUD() {
 
     // Scope / ADS overlay
     if(player.scope) {
-        // 모든 무기 동일: ADS 효과 (화면 살짝 어둡게 + 정밀 크로스헤어)
-        ctx.fillStyle = 'rgba(0,0,0,0.1)';
-        ctx.fillRect(0,0,W,H);
-        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(W/2-15, H/2); ctx.lineTo(W/2-5, H/2);
-        ctx.moveTo(W/2+5, H/2); ctx.lineTo(W/2+15, H/2);
-        ctx.moveTo(W/2, H/2-15); ctx.lineTo(W/2, H/2-5);
-        ctx.moveTo(W/2, H/2+5); ctx.lineTo(W/2, H/2+15);
-        ctx.stroke();
+        if(player.weapon === 2) {
+            // 스나이퍼 스코프: 큰 창문 + 얇은 검은 링 + 바깥 불투명
+            const cx = W/2, cy = H/2;
+            const scopeR = Math.min(W, H) * 0.38; // 큰 렌즈 창문
+
+            // 바깥 영역 = 검은색 (총 몸체가 시야 차단)
+            ctx.save();
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.rect(0, 0, W, H);
+            ctx.arc(cx, cy, scopeR, 0, Math.PI * 2, true); // 원형 구멍
+            ctx.fill();
+
+            // 얇은 스코프 링
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(cx, cy, scopeR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 십자선
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(cx - scopeR * 0.7, cy); ctx.lineTo(cx - 5, cy);
+            ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + scopeR * 0.7, cy);
+            ctx.moveTo(cx, cy - scopeR * 0.7); ctx.lineTo(cx, cy - 5);
+            ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + scopeR * 0.7);
+            ctx.stroke();
+
+            // 중앙 점
+            ctx.fillStyle = 'rgba(255,50,50,0.7)';
+            ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        } else {
+            // 일반 무기: ADS (화면 살짝 어둡게 + 크로스헤어)
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(0,0,W,H);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(W/2-15, H/2); ctx.lineTo(W/2-5, H/2);
+            ctx.moveTo(W/2+5, H/2); ctx.lineTo(W/2+15, H/2);
+            ctx.moveTo(W/2, H/2-15); ctx.lineTo(W/2, H/2-5);
+            ctx.moveTo(W/2, H/2+5); ctx.lineTo(W/2, H/2+15);
+            ctx.stroke();
+        }
     }
 
     // Spawn protection indicator
@@ -2968,6 +3004,15 @@ function renderWeapon3D() {
         if (currentWeapon3D) weaponScene.remove(currentWeapon3D);
         currentWeapon3D = weaponModels3D[wpnIdx];
         weaponScene.add(currentWeapon3D);
+    }
+
+    // 스나이퍼 ADS: 3D 모델 숨김 (2D 스코프 오버레이로 대체)
+    if (wpnIdx === 2 && player.scope) {
+        currentWeapon3D.visible = false;
+        weaponRenderer.clear();
+        return;
+    } else if (currentWeapon3D) {
+        currentWeapon3D.visible = true;
     }
 
     // 애니메이션 계산
