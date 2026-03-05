@@ -2503,19 +2503,16 @@ function drawHUD() {
     // Scope / ADS overlay
     if(player.scope) {
         if(player.weapon === 2) {
-            // 스나이퍼: 스코프 오버레이
-            ctx.strokeStyle = 'rgba(0,200,255,0.6)';
-            ctx.lineWidth = 1;
+            // 스나이퍼: 스코프 창문 뷰 (3D 모델 스코프로 자연스럽게 보임)
+            // 얇은 십자선만 표시
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 0.5;
             ctx.beginPath();
-            ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H);
-            ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+            ctx.moveTo(W/2-20, H/2); ctx.lineTo(W/2-4, H/2);
+            ctx.moveTo(W/2+4, H/2); ctx.lineTo(W/2+20, H/2);
+            ctx.moveTo(W/2, H/2-20); ctx.lineTo(W/2, H/2-4);
+            ctx.moveTo(W/2, H/2+4); ctx.lineTo(W/2, H/2+20, H/2);
             ctx.stroke();
-            ctx.beginPath(); ctx.arc(W/2, H/2, 100, 0, Math.PI*2); ctx.stroke();
-            ctx.beginPath(); ctx.arc(W/2, H/2, 200, 0, Math.PI*2); ctx.stroke();
-            // 비네트
-            ctx.fillStyle = 'rgba(0,0,0,0.8)';
-            ctx.beginPath(); ctx.rect(0,0,W,H);
-            ctx.arc(W/2, H/2, 250, 0, Math.PI*2, true); ctx.fill();
         } else {
             // 일반 무기: ADS 효과 (화면 살짝 어둡게 + 정밀 크로스헤어)
             ctx.fillStyle = 'rgba(0,0,0,0.1)';
