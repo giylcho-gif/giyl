@@ -2834,21 +2834,38 @@ const _sleeveMat = new THREE.MeshStandardMaterial({color: 0x0a0a0a, roughness: 0
 function buildRobloxArm() {
     const arm = new THREE.Group();
 
-    // 피부 블록 (위쪽, 무기 그립 부분)
-    const hand = new THREE.Mesh(
-        new THREE.BoxGeometry(0.055, 0.07, 0.055),
+    // 손목 (피부, 무기 그립 부분)
+    const wrist = new THREE.Mesh(
+        new THREE.BoxGeometry(0.052, 0.08, 0.052),
         _skinMat
     );
-    hand.position.set(0, -0.015, 0);
-    arm.add(hand);
+    wrist.position.set(0, -0.02, 0);
+    arm.add(wrist);
 
-    // 다크 슬리브 블록 (아래쪽, 화면 아래에서 올라오도록 길게)
-    const sleeve = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.55, 0.06),
+    // 소매 커프 (슬리브와 피부 사이 경계)
+    const cuffMat = new THREE.MeshStandardMaterial({color: 0x151515, roughness: 0.75, metalness: 0.0});
+    const cuff = new THREE.Mesh(
+        new THREE.BoxGeometry(0.063, 0.025, 0.063),
+        cuffMat
+    );
+    cuff.position.set(0, -0.065, 0);
+    arm.add(cuff);
+
+    // 하완 슬리브 (손목 쪽, 약간 좁음)
+    const lowerSleeve = new THREE.Mesh(
+        new THREE.BoxGeometry(0.058, 0.22, 0.058),
         _sleeveMat
     );
-    sleeve.position.set(0, -0.32, 0);
-    arm.add(sleeve);
+    lowerSleeve.position.set(0, -0.19, 0);
+    arm.add(lowerSleeve);
+
+    // 상완 슬리브 (팔꿈치 쪽, 약간 넓음)
+    const upperSleeve = new THREE.Mesh(
+        new THREE.BoxGeometry(0.065, 0.30, 0.065),
+        _sleeveMat
+    );
+    upperSleeve.position.set(0, -0.45, 0);
+    arm.add(upperSleeve);
 
     return arm;
 }
