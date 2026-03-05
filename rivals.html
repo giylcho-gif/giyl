@@ -2811,8 +2811,9 @@ const weaponModelConfigs = [
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.18, -0.18, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.38),
+        hideMaterials: ['Material__180'], // 회색 래핑 제거
         arms: {
-            left:  { pos: [0, 0.0, -0.10], rot: [0, 0, -0.75] }
+            left:  { pos: [0.08, 0.0, 0], rot: [0.25, 0, -0.75] }
         }
     },
     { // 스나이퍼 (배럴 LOCAL Z축)
@@ -2822,7 +2823,7 @@ const weaponModelConfigs = [
         idlePos: new THREE.Vector3(0.18, -0.18, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.40),
         arms: {
-            left:  { pos: [0, 0.0, -0.14], rot: [0, 0, -0.75] }
+            left:  { pos: [0.08, 0.0, 0], rot: [0.25, 0, -0.75] }
         }
     }
 ];
@@ -2904,9 +2905,14 @@ function initWeapon3DModels() {
                 }
             });
 
-            // 재질 최적화: 금속성 제거 → 회색 없앰, 텍스처 색상만 표시
+            // 재질 최적화: 금속성 제거, 숨길 재질 처리
+            const hideMats = cfg.hideMaterials || [];
             model.traverse(child => {
                 if (child.isMesh && child.material) {
+                    if (hideMats.includes(child.material.name)) {
+                        child.visible = false;
+                        return;
+                    }
                     child.material.metalness = 0;
                     child.material.roughness = 0.75;
                     child.material.needsUpdate = true;
