@@ -2828,144 +2828,47 @@ const weaponModelConfigs = [
 ];
 let weaponModelsLoaded = false;
 
-// GLB 소매 모델 팔 시스템
+// 실린더 기반 현실적 팔 시스템 (왼팔만)
 const _skinMat = new THREE.MeshStandardMaterial({color: 0xe8b88a, roughness: 0.7, metalness: 0.0});
-const _sleeveDarkMat = new THREE.MeshStandardMaterial({color: 0x1a1a1a, roughness: 0.8, metalness: 0.0});
-let _sleeveGeo = null; // 베이크된 왼팔 소매 지오메트리
-
-function loadSleeveModel() {
-    gltfLoader.load('models/fps_arms_gloved.glb', (gltf) => {
-        const scene = gltf.scene;
-        scene.updateMatrixWorld(true);
-
-        // sleeves SkinnedMesh 찾기
-        let sleeveMesh = null;
-        scene.traverse(child => {
-            if (child.isMesh && child.material && child.material.name === 'sleeves') {
-                sleeveMesh = child;
-            }
-        });
-
-        if (!sleeveMesh) { console.error('[3D] 소매 메쉬를 찾을 수 없음'); return; }
-
-        // SkinnedMesh → 바인드 포즈 geometry 베이크 (일반 Mesh로 변환)
-        const geo = sleeveMesh.geometry.clone();
-        const posAttr = geo.attributes.position;
-        const skinIdxAttr = geo.attributes.skinIndex;
-        const skinWgtAttr = geo.attributes.skinWeight;
-
-        if (skinIdxAttr && skinWgtAttr) {
-            // 본 매트릭스 가져오기
-            sleeveMesh.skeleton.update();
-            const boneMatrices = [];
-            for (let i = 0; i < sleeveMesh.skeleton.bones.length; i++) {
-                const m = new THREE.Matrix4();
-                m.multiplyMatrices(sleeveMesh.skeleton.bones[i].matrixWorld, sleeveMesh.skeleton.boneInverses[i]);
-                boneMatrices.push(m);
-            }
-
-            // 각 버텍스를 본 가중치로 변환
-            const v = new THREE.Vector3();
-            const tv = new THREE.Vector3();
-            for (let i = 0; i < posAttr.count; i++) {
-                v.fromBufferAttribute(posAttr, i);
-                const result = new THREE.Vector3(0, 0, 0);
-
-                const _getComp = (attr, idx, comp) => {
-                    if (comp===0) return attr.getX(idx);
-                    if (comp===1) return attr.getY(idx);
-                    if (comp===2) return attr.getZ(idx);
-                    return attr.getW(idx);
-                };
-                for (let j = 0; j < 4; j++) {
-                    const boneIdx = _getComp(skinIdxAttr, i, j);
-                    const weight = _getComp(skinWgtAttr, i, j);
-                    if (weight > 0 && boneMatrices[boneIdx]) {
-                        tv.copy(v).applyMatrix4(boneMatrices[boneIdx]);
-                        result.addScaledVector(tv, weight);
-                    }
-                }
-                posAttr.setXYZ(i, result.x, result.y, result.z);
-            }
-            posAttr.needsUpdate = true;
-        }
-
-        // 왼팔만 추출: X > 5인 버텍스만 포함하는 면 필터링
-        const idx = geo.index;
-        const newIndices = [];
-        for (let i = 0; i < idx.count; i += 3) {
-            const a = idx.getX(i), b = idx.getX(i+1), c = idx.getX(i+2);
-            const ax = posAttr.getX(a), bx = posAttr.getX(b), cx = posAttr.getX(c);
-            // 삼각형의 중심 X가 양수면 왼팔
-            if ((ax + bx + cx) / 3 > 5) {
-                newIndices.push(a, b, c);
-            }
-        }
-        geo.setIndex(newIndices);
-        geo.computeVertexNormals();
-
-        // 왼팔 중심으로 재배치
-        geo.computeBoundingBox();
-        const center = geo.boundingBox.getCenter(new THREE.Vector3());
-        geo.translate(-center.x, -center.y, -center.z);
-
-        _sleeveGeo = geo;
-        console.log(`[3D] 소매 왼팔 지오메트리 베이크 완료 (삼각형: ${newIndices.length/3})`);
-
-        // 이미 부착된 무기 팔 교체
-        weaponModelConfigs.forEach((cfg, idx) => {
-            if (cfg._wrapper && cfg._wrapper.userData.leftHand) {
-                replaceArmWithSleeve(cfg._wrapper, idx);
-            }
-        });
-    });
-}
 
 function buildRobloxArm() {
     const arm = new THREE.Group();
 
-    // 피부 블록 (무기 그립 부분)
-    const hand = new THREE.Mesh(
-        new THREE.BoxGeometry(0.055, 0.07, 0.055),
+    // 손목 (피부, 실린더 - 총 그립 감싸는 부분)
+    const wrist = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.028, 0.030, 0.07, 8),
         _skinMat
     );
-    hand.position.set(0, -0.015, 0);
-    arm.add(hand);
+    wrist.position.set(0, -0.015, 0);
+    arm.add(wrist);
 
-    if (_sleeveGeo) {
-        // GLB에서 베이크된 왼팔 소매
-        const sleeve = new THREE.Mesh(_sleeveGeo, _sleeveDarkMat);
-        sleeve.scale.setScalar(0.0035);
-        sleeve.rotation.set(0, 0, Math.PI/2);
-        sleeve.position.set(0, -0.25, 0);
-        arm.add(sleeve);
-    } else {
-        // 폴백: 단순 박스 슬리브
-        const sleeve = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.55, 0.06),
-            _sleeveDarkMat
-        );
-        sleeve.position.set(0, -0.32, 0);
-        arm.add(sleeve);
-    }
+    // 소매 커프 (입구 밴드)
+    const cuffMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.7, metalness: 0.0});
+    const cuff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.034, 0.033, 0.02, 8),
+        cuffMat
+    );
+    cuff.position.set(0, -0.06, 0);
+    arm.add(cuff);
+
+    // 하완 소매 (손목~팔뚝, 약간 좁음)
+    const sleeveMat = new THREE.MeshStandardMaterial({color: 0x0a0a0a, roughness: 0.85, metalness: 0.0});
+    const lowerSleeve = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.033, 0.038, 0.22, 8),
+        sleeveMat
+    );
+    lowerSleeve.position.set(0, -0.18, 0);
+    arm.add(lowerSleeve);
+
+    // 상완 소매 (팔꿈치~어깨, 넓어짐)
+    const upperSleeve = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.038, 0.045, 0.30, 8),
+        sleeveMat
+    );
+    upperSleeve.position.set(0, -0.44, 0);
+    arm.add(upperSleeve);
 
     return arm;
-}
-
-function replaceArmWithSleeve(wrapper, wpnIdx) {
-    if (!_sleeveGeo) return;
-    const cfg = weaponModelConfigs[wpnIdx];
-    if (!cfg || !cfg.arms) return;
-
-    if (wrapper.userData.leftHand) {
-        wrapper.remove(wrapper.userData.leftHand);
-    }
-    const newArm = buildRobloxArm();
-    newArm.position.set(cfg.arms.left.pos[0], cfg.arms.left.pos[1], cfg.arms.left.pos[2]);
-    newArm.rotation.set(cfg.arms.left.rot[0], cfg.arms.left.rot[1], cfg.arms.left.rot[2]);
-    wrapper.add(newArm);
-    wrapper.userData.leftHand = newArm;
-    console.log(`[3D] GLB 소매 교체 완료: ${weapons[wpnIdx]?.name || wpnIdx}`);
 }
 
 function attachArmsToWeapon(wrapper, wpnIdx) {
@@ -3025,7 +2928,6 @@ function initWeapon3DModels() {
             wrapper.userData.idlePos = cfg.idlePos.clone();
             wrapper.userData.adsPos = cfg.adsPos.clone();
             wrapper.userData.config = cfg;
-            cfg._wrapper = wrapper; // GLB 소매 교체용 참조 저장
 
             weaponModels3D[idx] = wrapper;
             console.log(`[3D] 무기 모델 로드 완료: ${weapons[idx]?.name || idx} (${cfg.path})`);
@@ -3034,8 +2936,6 @@ function initWeapon3DModels() {
         (err) => console.error(`[3D] 모델 로드 실패: ${cfg.path}`, err));
     });
 
-    // GLB 소매 모델 로드 (로드 완료 시 기존 박스 팔을 교체)
-    loadSleeveModel();
 }
 
 // 스킨 적용 (GLB 모델)
