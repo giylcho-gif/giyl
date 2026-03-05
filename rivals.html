@@ -1620,7 +1620,7 @@ function playerShoot() {
                 const headshot = rHitY >= headY;
                 // 스나이퍼 헤드샷 = 무조건 원킬 (999 데미지)
                 let dmg;
-                if(headshot && wpnIdx === 2) {
+                if(headshot && player.weapon === 2) {
                     dmg = 999;
                 } else {
                     dmg = w.damage * (headshot ? 2.5 : 1);
@@ -1637,7 +1637,7 @@ function playerShoot() {
                 const headshot = eHitY >= eHeadY;
                 // 스나이퍼 헤드샷 = 무조건 원킬
                 let dmg;
-                if(headshot && wpnIdx === 2) {
+                if(headshot && player.weapon === 2) {
                     dmg = 999;
                 } else {
                     dmg = w.damage * (headshot ? 2.5 : 1);
