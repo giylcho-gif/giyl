@@ -3766,8 +3766,8 @@ function update() {
         let mx = 0, mz = 0;
         if(keys['KeyW']) { mx -= Math.sin(yaw); mz += Math.cos(yaw); }
         if(keys['KeyS']) { mx += Math.sin(yaw); mz -= Math.cos(yaw); }
-        if(keys['KeyA']) { mx -= Math.cos(yaw); mz -= Math.sin(yaw); }
-        if(keys['KeyD']) { mx += Math.cos(yaw); mz += Math.sin(yaw); }
+        if(keys['KeyA']) { mx += Math.cos(yaw); mz += Math.sin(yaw); }
+        if(keys['KeyD']) { mx -= Math.cos(yaw); mz -= Math.sin(yaw); }
 
         const len = Math.sqrt(mx*mx + mz*mz);
         if(len > 0) { mx /= len; mz /= len; }
