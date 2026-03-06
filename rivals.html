@@ -156,7 +156,8 @@ mapRenderer.setSize(W, H);
 mapRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 mapRenderer.shadowMap.enabled = false;
 mapRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-mapRenderer.toneMappingExposure = 2.0;
+mapRenderer.toneMappingExposure = 1.0;
+mapRenderer.outputEncoding = THREE.sRGBEncoding;
 
 const mapScene = new THREE.Scene();
 mapScene.background = new THREE.Color(0x87CEEB); // 밝은 하늘색
@@ -164,17 +165,82 @@ mapScene.fog = new THREE.Fog(0x87CEEB, 600, 2000); // 밝은 안개
 
 const mapCamera = new THREE.PerspectiveCamera(75, W / H, 0.5, 2000);
 
-// 맵 조명 - 매우 밝게
-const mapDirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+// 맵 조명 (sRGBEncoding 기준)
+const mapDirLight = new THREE.DirectionalLight(0xffffff, 1.2);
 mapDirLight.position.set(100, 200, 100);
 mapScene.add(mapDirLight);
-const mapDirLight2 = new THREE.DirectionalLight(0xffeedd, 1.0);
+const mapDirLight2 = new THREE.DirectionalLight(0xffeedd, 0.6);
 mapDirLight2.position.set(-100, 150, -50);
 mapScene.add(mapDirLight2);
-const mapAmbient = new THREE.AmbientLight(0xffffff, 1.2);
+const mapAmbient = new THREE.AmbientLight(0xffffff, 0.6);
 mapScene.add(mapAmbient);
-const mapHemi = new THREE.HemisphereLight(0x87CEEB, 0xB97A20, 0.8);
+const mapHemi = new THREE.HemisphereLight(0x87CEEB, 0xB97A20, 0.4);
 mapScene.add(mapHemi);
+
+// ====== 3D 적 모델 시스템 (sand_soldier GLB) ======
+let enemyModelTemplate = null;
+const enemy3DModels = [];
+const MAX_ENEMY_3D = 8;
+const SOLDIER_H = 10; // 플레이어 높이와 동일
+let enemyModelScale = 1;
+
+// GLB 로드 후 인스턴스 생성 (separate parse 방식 - r128 clone 버그 회피)
+fetch('models/sand_soldier.glb').then(r => r.arrayBuffer()).then(buffer => {
+    const loader = new THREE.GLTFLoader();
+    // 먼저 템플릿 파싱으로 크기 측정
+    loader.parse(buffer.slice(0), '', (gltf) => {
+        enemyModelTemplate = gltf.scene;
+        const box = new THREE.Box3().setFromObject(enemyModelTemplate);
+        const h = box.getSize(new THREE.Vector3()).y;
+        if (h <= 0) { console.error('[3D적] 모델 높이 0'); return; }
+        enemyModelScale = SOLDIER_H / h;
+        console.log(`[3D적] 템플릿 로드 - 원본높이:${h.toFixed(1)} 스케일:${enemyModelScale.toFixed(6)}`);
+
+        // 각 인스턴스를 별도 parse (SkinnedMesh clone 버그 회피)
+        let loaded = 0;
+        for (let i = 0; i < MAX_ENEMY_3D; i++) {
+            loader.parse(buffer.slice(0), '', (g) => {
+                const model = g.scene;
+                model.scale.set(enemyModelScale, enemyModelScale, enemyModelScale);
+                model.visible = false;
+                model.traverse(child => {
+                    if (child.isMesh) {
+                        child.frustumCulled = false;
+                        child.castShadow = false;
+                        child.receiveShadow = false;
+                        if (child.material) child.material.needsUpdate = true;
+                    }
+                });
+                mapScene.add(model);
+                enemy3DModels[i] = { model, active: false };
+                if (++loaded === MAX_ENEMY_3D)
+                    console.log(`[3D적] 군인 풀 완료 - ${MAX_ENEMY_3D}개`);
+            });
+        }
+    });
+}).catch(e => console.error('[3D적] GLB 로드 실패:', e));
+
+// 적 3D 모델 동기화 (매 프레임)
+function syncEnemy3D() {
+    if (!enemyModelTemplate || enemy3DModels.length < MAX_ENEMY_3D) return;
+    const aliveEnemies = enemies.filter(e => e.hp > 0);
+    for (let i = 0; i < MAX_ENEMY_3D; i++) {
+        const slot = enemy3DModels[i];
+        if (!slot) continue;
+        if (i < aliveEnemies.length) {
+            const e = aliveEnemies[i];
+            slot.model.visible = true;
+            slot.active = true;
+            const floorH = getFloorHeight(e.x, e.z);
+            const ey = (floorH !== -Infinity) ? floorH : e.y;
+            slot.model.position.set(e.x, ey, e.z);
+            slot.model.rotation.y = Math.PI - e.yaw;
+        } else {
+            slot.model.visible = false;
+            slot.active = false;
+        }
+    }
+}
 
 // GLB 맵 모델 로드
 let mapModel = null;
@@ -237,6 +303,7 @@ function checkWall3D(x, y, z, dirX, dirZ, dist) {
     const hits = _wallRaycaster.intersectObjects(mapCollisionMeshes, false);
     return hits.length > 0;
 }
+
 
 // 3D 맵 카메라 동기화 (매 프레임)
 function syncMapCamera() {
@@ -1000,10 +1067,13 @@ function spawnEnemy() {
         sx = sp.x + (Math.random()-0.5)*40;
         sz = sp.z + (Math.random()-0.5)*40;
     }
+    // 3D 맵 바닥 높이 반영
+    const spawnFloorY = getFloorHeight(sx, sz);
+    const sy = (spawnFloorY !== -Infinity) ? spawnFloorY : 0;
     enemies.push({
         x: sx,
         z: sz,
-        y: 0,
+        y: sy,
         vx: 0, vz: 0, vy: 0,
         hp: classes[cls].hp,
         maxHp: classes[cls].hp,
@@ -1932,6 +2002,12 @@ function updateBot(bot) {
         bot.targetZ = (Math.random()-0.5) * MAP_SIZE * 1.2;
         bot.stateTimer = 60;
         bot.stuckCounter = 0;
+    }
+
+    // 봇 바닥 높이 추적 (3D 맵)
+    const botFloor = getFloorHeight(bot.x, bot.z);
+    if (botFloor !== -Infinity) {
+        bot.y = botFloor;
     }
 
     // Bot vs bot collision (물리)
@@ -3852,8 +3928,8 @@ function update() {
         if(shooting && weapons[player.weapon].auto) playerShoot();
         else if(shooting) { playerShoot(); shooting = false; }
 
-        // AI 봇 비활성화
-        // if(!isOnline) enemies.forEach(updateBot);
+        // AI 봇 업데이트
+        if(!isOnline) enemies.forEach(updateBot);
 
         // Update bullets
         for(let i = bullets.length-1; i >= 0; i--) {
@@ -3930,11 +4006,11 @@ function update() {
         killFeed.forEach(kf => kf.time--);
         killFeed = killFeed.filter(kf => kf.time > 0);
 
-        // AI 봇 비활성화 - 리스폰 없음
-        // if(!isOnline) {
-        //     const maxBots = 8;
-        //     while(enemies.length < maxBots) spawnEnemy();
-        // }
+        // AI 봇 리스폰
+        if(!isOnline) {
+            const maxBots = 8;
+            while(enemies.length < maxBots) spawnEnemy();
+        }
 
         // Network sync
         if(isOnline) {
@@ -3983,25 +4059,13 @@ function render() {
     else if(gameState === 'classSelect') { drawClassSelect(); }
     else if(gameState === 'skinSelect') { drawSkinSelect(); }
     else {
-        // 3D 맵 렌더링
+        // 3D 적 모델 동기화 + 맵 렌더링
+        syncEnemy3D();
         renderMap3D();
 
         drawGround();
 
-        // 적만 렌더링 (벽은 3D 맵이 담당, 충돌용 walls[]는 유지)
-        const renderables = [];
-        enemies.filter(e => e.hp > 0).forEach(e => {
-            const dx = e.x - player.x, dz = e.z - player.z;
-            const d = dx*dx + dz*dz;
-            renderables.push({type:'enemy', data:{...e, dist:d, ref:e}, dist:d});
-        });
-        if(isOnline && remotePlayer && remotePlayer.alive) {
-            const rdx = remotePlayer.x - player.x, rdz = remotePlayer.z - player.z;
-            const rDist = rdx*rdx + rdz*rdz;
-            renderables.push({type:'enemy', data:{...remotePlayer, class:remotePlayer.selectedClass, dist:rDist, ref:remotePlayer}, dist:rDist});
-        }
-        renderables.sort((a,b) => b.dist - a.dist);
-        renderables.forEach(r => drawEnemy(r.data));
+        // 적 이름표/HP바 비활성화
 
         // Draw bullets
         bullets.forEach(b => {
@@ -4077,8 +4141,7 @@ function render() {
 
 // ====== GAME LOOP ======
 generateMap();
-// AI 봇 비활성화 (멀티플레이어 전용)
-// for(let i = 0; i < 8; i++) spawnEnemy();
+for(let i = 0; i < 8; i++) spawnEnemy();
 
 // 고정 60fps 게임 루프 (모든 플레이어 동일 속도)
 let lastTime = 0;
