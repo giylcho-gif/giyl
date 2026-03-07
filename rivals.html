@@ -121,7 +121,6 @@ weaponRenderer.setSize(W, H);
 weaponRenderer.setClearColor(0x000000, 0);
 weaponRenderer.localClippingEnabled = true; // 소매 클리핑용
 weaponRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-weaponRenderer.outputEncoding = THREE.sRGBEncoding; // SkinnedMesh 렌더링에 필요 (r128 버그)
 
 const weaponScene = new THREE.Scene();
 const weaponCamera = new THREE.PerspectiveCamera(70, W / H, 0.01, 10);
@@ -3013,77 +3012,30 @@ const weaponModelConfigs = [
 ];
 let weaponModelsLoaded = false;
 
-// GLB 기반 FPS 팔 모델 시스템 (왼팔만)
-let fpsArmTemplate = null;
-const FPS_ARM_SCALE = 0.4; // GLB 팔 크기 조절
-
-// fps_arms.glb 로드
-fetch('models/fps_arms.glb').then(r => r.arrayBuffer()).then(buffer => {
-    const loader = new THREE.GLTFLoader();
-    loader.parse(buffer.slice(0), '', (gltf) => {
-        fpsArmTemplate = { buffer: buffer, scene: gltf.scene };
-        // 재질 최적화
-        gltf.scene.traverse(child => {
-            if (child.isMesh && child.material) {
-                child.material.metalness = 0.1;
-                child.material.roughness = 0.7;
-                child.material.needsUpdate = true;
-                child.frustumCulled = false;
-            }
-        });
-        console.log('[3D] fps_arms.glb 템플릿 로드 완료');
-        // 이미 로드된 무기에 팔 재부착
-        reattachArmsIfNeeded();
-    });
-}).catch(e => console.error('[3D] fps_arms.glb 로드 실패:', e));
-
-// 팔이 아직 없는 무기에 재부착
-function reattachArmsIfNeeded() {
-    if (!fpsArmTemplate) return;
-    weaponModelConfigs.forEach((cfg, idx) => {
-        if (!cfg || !cfg.hasArm) return;
-        const wrapper = weaponModels3D[idx];
-        if (wrapper && !wrapper.userData.armsAttached) {
-            attachArmsToWeapon(wrapper, idx);
-        }
-    });
-}
-
-// 폴백: 실린더 팔 (GLB 로드 전)
+// 실린더 기반 현실적 팔 시스템 (왼팔만)
 const _skinMat = new THREE.MeshStandardMaterial({color: 0xe8b88a, roughness: 0.7, metalness: 0.0});
 
 function buildRobloxArm() {
-    // GLB 팔 모델이 로드되었으면 사용
-    if (fpsArmTemplate) {
-        const arm = new THREE.Group();
-        const loader = new THREE.GLTFLoader();
-        loader.parse(fpsArmTemplate.buffer.slice(0), '', (gltf) => {
-            const model = gltf.scene;
-            model.scale.setScalar(FPS_ARM_SCALE);
-            model.traverse(child => {
-                if (child.isMesh && child.material) {
-                    child.material.metalness = 0.0;
-                    child.material.roughness = 0.6;
-                    child.material.emissive = new THREE.Color(0x333333);
-                    child.material.emissiveIntensity = 0.4;
-                    child.material.needsUpdate = true;
-                    child.frustumCulled = false;
-                }
-            });
-            arm.add(model);
-            console.log('[3D] GLB 팔 모델 인스턴스 생성');
-        });
-        return arm;
-    }
-
-    // 폴백: 기존 실린더 팔
     const arm = new THREE.Group();
+
+    // 손목 (피부, 실린더 - 총 그립 부분)
     const wrist = new THREE.Mesh(
         new THREE.CylinderGeometry(0.038, 0.042, 0.08, 10),
         _skinMat
     );
     wrist.position.set(0, -0.02, 0);
     arm.add(wrist);
+
+    // 소매 커프 (입구 밴드)
+    const cuffMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.7, metalness: 0.0});
+    const cuff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.048, 0.046, 0.025, 10),
+        cuffMat
+    );
+    cuff.position.set(0, -0.07, 0);
+    arm.add(cuff);
+
+    // 하완 소매 (손목~팔뚝)
     const sleeveMat = new THREE.MeshStandardMaterial({color: 0x0a0a0a, roughness: 0.85, metalness: 0.0});
     const lowerSleeve = new THREE.Mesh(
         new THREE.CylinderGeometry(0.046, 0.055, 0.28, 10),
