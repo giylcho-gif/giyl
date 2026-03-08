@@ -3085,7 +3085,7 @@ function buildRobloxArm() {
 
     // 손목 (피부, 실린더 - 총 그립 부분)
     const wrist = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.038, 0.042, 0.08, 10),
+        new THREE.CylinderGeometry(0.055, 0.06, 0.08, 10),
         _skinMat
     );
     wrist.position.set(0, -0.02, 0);
@@ -3094,7 +3094,7 @@ function buildRobloxArm() {
     // 소매 커프 (입구 밴드)
     const cuffMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.7, metalness: 0.0});
     const cuff = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.048, 0.046, 0.025, 10),
+        new THREE.CylinderGeometry(0.068, 0.065, 0.025, 10),
         cuffMat
     );
     cuff.position.set(0, -0.07, 0);
@@ -3103,13 +3103,13 @@ function buildRobloxArm() {
     // 하완 소매 (손목~팔뚝)
     const sleeveMat = new THREE.MeshStandardMaterial({color: 0x0a0a0a, roughness: 0.85, metalness: 0.0});
     const lowerSleeve = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.046, 0.055, 0.28, 10),
+        new THREE.CylinderGeometry(0.065, 0.078, 0.28, 10),
         sleeveMat
     );
     lowerSleeve.position.set(0, -0.22, 0);
     arm.add(lowerSleeve);
     const upperSleeve = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.055, 0.066, 0.35, 10),
+        new THREE.CylinderGeometry(0.078, 0.092, 0.35, 10),
         sleeveMat
     );
     upperSleeve.position.set(0, -0.54, 0);
