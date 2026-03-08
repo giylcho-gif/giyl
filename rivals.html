@@ -599,7 +599,7 @@ function getCurrentRank() {
 }
 
 // ====== GAME STATE ======
-let gameState = 'title'; // title, classSelect, playing, dead, scoreboard, lobby, waiting, skinSelect
+let gameState = 'title'; // title, classSelect, secondarySelect, playing, dead, scoreboard, lobby, waiting, skinSelect
 let mouseX = W/2, mouseY = H/2;
 let mouseLocked = false;
 let yaw = 0, pitch = 0;
@@ -952,7 +952,9 @@ const player = {
 const weapons = [
     { name:'AK-47', damage:18, fireRate:6, reloadSpeed:90, spread:0.015, auto:true, range:300, color:'#ff6b35', ammoName:'7.62mm', icon:'▄█▀', sound:'rifle', model:'models/ak47.glb' },
     null, // 특수소총 제거됨
-    { name:'스나이퍼', damage:90, fireRate:50, reloadSpeed:120, spread:0.002, auto:false, range:500, color:'#44ff88', ammoName:'.308', icon:'━━▄', sound:'sniper', scope:true, model:'models/sniper.glb' }
+    { name:'스나이퍼', damage:90, fireRate:50, reloadSpeed:120, spread:0.002, auto:false, range:500, color:'#44ff88', ammoName:'.308', icon:'━━▄', sound:'sniper', scope:true, model:'models/sniper.glb' },
+    { name:'Uzi', damage:12, fireRate:3, reloadSpeed:70, spread:0.03, auto:true, range:200, color:'#ffcc00', ammoName:'9mm', icon:'▄█', sound:'rifle', model:'models/uzi_submachine_gun.glb' },
+    { name:'리볼버', damage:45, fireRate:20, reloadSpeed:100, spread:0.008, auto:false, range:250, color:'#cc8844', ammoName:'.38', icon:'▄▀', sound:'sniper', model:'models/38_special_revolver.glb' }
 ];
 
 // ====== CLASSES ======
@@ -960,6 +962,12 @@ const classes = [
     { name:'돌격병', desc:'AK-47 + 빠른 이동', weapon:0, hp:100, armor:0, speed:2.5, color:'#ff6b35', ability:'대시', abilityCooldown:180 },
     { name:'특수부대', desc:'AK-47 + 높은 화력', weapon:0, hp:120, armor:25, speed:2.2, color:'#00ccff', ability:'보호막', abilityCooldown:240 },
     { name:'저격수', desc:'스나이퍼 + 스코프', weapon:2, hp:80, armor:0, speed:2.0, color:'#44ff88', ability:'투명화', abilityCooldown:360 }
+];
+
+// ====== SECONDARY WEAPONS ======
+const secondaryWeapons = [
+    { weaponIdx: 3, name: 'Uzi', desc: '빠른 연사 + 근접전 특화', color: '#ffcc00', ammo: 25 },
+    { weaponIdx: 4, name: '리볼버', desc: '높은 데미지 + 정밀 사격', color: '#cc8844', ammo: 6 }
 ];
 
 // ====== MAP ======
@@ -1163,6 +1171,11 @@ document.addEventListener('keydown', e => {
         if(e.code === 'Digit2') selectClass(1);
         if(e.code === 'Digit3') selectClass(2);
     }
+    if(gameState === 'secondarySelect') {
+        if(e.code === 'Digit1') selectSecondary(3); // Uzi
+        if(e.code === 'Digit2') selectSecondary(4); // 리볼버
+        if(e.code === 'Escape') { gameState = 'classSelect'; return; }
+    }
     // 스킨 보상 팝업 닫기
     if(pendingSkinReward) { pendingSkinReward = null; return; }
     if(gameState === 'dead' && e.code === 'Space' && player.respawnTimer <= 0) respawn();
@@ -1170,8 +1183,9 @@ document.addEventListener('keydown', e => {
     if(gameState === 'playing') {
         if(e.code === 'KeyR' && player.reloadTime <= 0 && !weapons[player.weapon].melee) reload();
         if(e.code === 'Tab') { e.preventDefault(); gameState = 'scoreboard'; return; }
-        // 무기 전환 1~4
+        // 무기 전환 1~2 (주무기, 보조무기)
         if(e.code === 'Digit1' && player.weaponSlots[0] !== undefined) { player.currentSlot = 0; player.weapon = player.weaponSlots[0]; player.scope = false; player.reloadTime = 0; }
+        if(e.code === 'Digit2' && player.weaponSlots[1] !== undefined) { player.currentSlot = 1; player.weapon = player.weaponSlots[1]; player.scope = false; player.reloadTime = 0; }
         // F키 빠른 근접공격 (낫)
         if(e.code === 'KeyF' && player.meleeCooldown <= 0 && !player.meleeActive) {
             player.meleeActive = true;
@@ -1282,6 +1296,16 @@ function handleMouseDown(e) {
                 break;
             }
         }
+    } else if(gameState === 'secondarySelect') {
+        for(let i = 0; i < 2; i++) {
+            const cw = 240, ch = 380;
+            const cx = W/2 - (2 * cw + 40) / 2 + i * (cw + 40);
+            const cy = 140;
+            if(coords.x >= cx && coords.x <= cx+cw && coords.y >= cy && coords.y <= cy+ch) {
+                selectSecondary(secondaryWeapons[i].weaponIdx);
+                break;
+            }
+        }
     } else if(gameState === 'dead') {
         // Save & Quit 버튼 체크
         const dqW = 180, dqH = 40;
@@ -1334,6 +1358,16 @@ canvas.addEventListener('touchstart', e => {
                 break;
             }
         }
+    } else if(gameState === 'secondarySelect') {
+        for(let i = 0; i < 2; i++) {
+            const cw = 240, ch = 380;
+            const cx = W/2 - (2 * cw + 40) / 2 + i * (cw + 40);
+            const cy = 140;
+            if(coords.x >= cx && coords.x <= cx+cw && coords.y >= cy && coords.y <= cy+ch) {
+                selectSecondary(secondaryWeapons[i].weaponIdx);
+                break;
+            }
+        }
     } else if(gameState === 'playing') {
         // 모바일은 전용 사격 버튼 사용, 캔버스 터치로는 사격하지 않음
         if(!isMobile) shooting = true;
@@ -1374,28 +1408,35 @@ document.addEventListener('mousemove', e => {
 // ====== GAME FUNCTIONS ======
 function selectClass(idx) {
     initAudio(); // 사용자 클릭으로 오디오 활성화
-    startSessionTimer();
     player.selectedClass = idx;
     const cls = classes[idx];
-    player.weaponSlots = [cls.weapon]; // 주무기만
-    player.currentSlot = 0;
-    player.weapon = player.weaponSlots[0];
     player.maxHp = cls.hp;
     player.hp = cls.hp;
     player.armor = cls.armor;
     player.speed = cls.speed;
-    player.ammo = [30, 30, 5];
-    player.maxAmmo = [30, 30, 5];
+    player._pendingPrimary = cls.weapon;
+    gameState = 'secondarySelect';
+}
+
+function selectSecondary(wpnIdx) {
+    startSessionTimer();
+    const secAmmo = secondaryWeapons.find(s => s.weaponIdx === wpnIdx)?.ammo || 10;
+    player.weaponSlots = [player._pendingPrimary, wpnIdx]; // [주무기, 보조무기]
+    player.currentSlot = 0;
+    player.weapon = player.weaponSlots[0];
+    player.selectedSecondary = wpnIdx;
+    // 탄약: [주무기, 보조무기, 수류탄]
+    const primaryAmmo = player._pendingPrimary === 2 ? 5 : 30;
+    player.ammo = [primaryAmmo, secAmmo, 3];
+    player.maxAmmo = [player._pendingPrimary === 2 ? 5 : 30, secAmmo, 3];
 
     if(isOnline || networkState === 'lobby' || networkState === 'waiting' || ws) {
-        // Online: send class selection and wait for start_game
         myClassSelected = true;
-        sendMsg({ type: 'class_selected', selectedClass: idx });
+        sendMsg({ type: 'class_selected', selectedClass: player.selectedClass });
         netMessage = '상대방을 기다리는 중...';
         netMessageTimer = 999;
         gameState = 'waiting';
     } else {
-        // Solo
         respawn();
         gameState = 'playing';
         if(!isMobile) { try { canvas.requestPointerLock(); } catch(e) {} }
@@ -1476,7 +1517,12 @@ function respawn() {
     player.armor = classes[player.selectedClass].armor;
     player.currentSlot = 0;
     player.weapon = player.weaponSlots[0];
-    player.ammo = [30, 30, 5];
+    // 탄약 리셋: 주무기, 보조무기, 수류탄
+    const secWpn = player.weaponSlots[1];
+    const secAmmo = secWpn !== undefined ? (secondaryWeapons.find(s => s.weaponIdx === secWpn)?.ammo || 10) : 30;
+    const priAmmo = player.weaponSlots[0] === 2 ? 5 : 30;
+    player.ammo = [priAmmo, secAmmo, 3];
+    player.maxAmmo = [priAmmo, secAmmo, 3];
     player.reloadTime = 0;
     player.shootCooldown = 0;
     player.killStreak = 0;
@@ -1496,7 +1542,7 @@ function respawn() {
 
 function reload() {
     if(weapons[player.weapon].melee) return; // 낫은 리로드 없음
-    if(player.reloadTime <= 0 && player.ammo[player.weapon] < player.maxAmmo[player.weapon]) {
+    if(player.reloadTime <= 0 && player.ammo[player.currentSlot] < player.maxAmmo[player.currentSlot]) {
         player.reloadTime = weapons[player.weapon].reloadSpeed;
         playSound('reload', 0.3);
     }
@@ -1620,7 +1666,7 @@ function playerShoot() {
         return;
     }
 
-    if(player.ammo[player.weapon] <= 0) {
+    if(player.ammo[player.currentSlot] <= 0) {
         if(!w.melee) reload();
         return;
     }
@@ -1629,7 +1675,7 @@ function playerShoot() {
 
     const isGrenade = w.grenade;
     player.shootCooldown = w.fireRate;
-    player.ammo[player.weapon]--;
+    player.ammo[player.currentSlot]--;
     player.muzzleFlash = isGrenade ? 0 : 4;
     player.shootAnim = 1;
     playSound(w.sound, 0.35);
@@ -2582,11 +2628,11 @@ function drawHUD() {
     }
 
     // Weapon slots HUD
-    const slotNames = ['1 주무기', '2 보조', '3 낫', '4 수류탄'];
-    const slotW = 70, slotH = 28, slotGap = 4;
-    const slotsStartX = W - (slotW + slotGap) * 4 - 10;
+    const numSlots = player.weaponSlots.length;
+    const slotW = 90, slotH = 28, slotGap = 4;
+    const slotsStartX = W - (slotW + slotGap) * numSlots - 10;
     ctx.textAlign = 'center';
-    for(let i = 0; i < 4; i++) {
+    for(let i = 0; i < numSlots; i++) {
         const sx = slotsStartX + i * (slotW + slotGap);
         const sy = H - 95;
         const isActive = player.currentSlot === i;
@@ -2598,18 +2644,20 @@ function drawHUD() {
         ctx.strokeRect(sx, sy, slotW, slotH);
         ctx.font = isActive ? 'bold 11px Segoe UI' : '10px Segoe UI';
         ctx.fillStyle = isActive ? '#fff' : '#999';
-        ctx.fillText(slotNames[i], sx + slotW/2, sy + 18);
+        const slotLabel = i === 0 ? `1 ${slotWpn?.name||'주무기'}` : `2 ${slotWpn?.name||'보조'}`;
+        ctx.fillText(slotLabel, sx + slotW/2, sy + 18);
     }
 
-    // Ammo (낫은 탄약 없음)
+    // Ammo (슬롯 인덱스 기반)
     ctx.textAlign = 'right';
     if(!w.melee) {
+        const ammoSlot = player.currentSlot;
         ctx.font = 'bold 28px Segoe UI';
-        ctx.fillStyle = player.ammo[player.weapon] <= 5 ? '#f44' : '#fff';
-        ctx.fillText(player.ammo[player.weapon] + '', W-80, H-35);
+        ctx.fillStyle = (player.ammo[ammoSlot] || 0) <= 5 ? '#f44' : '#fff';
+        ctx.fillText((player.ammo[ammoSlot] || 0) + '', W-80, H-35);
         ctx.font = '16px Segoe UI';
         ctx.fillStyle = '#aaa';
-        ctx.fillText('/ ' + player.maxAmmo[player.weapon], W-30, H-35);
+        ctx.fillText('/ ' + (player.maxAmmo[ammoSlot] || 0), W-30, H-35);
     } else {
         ctx.font = 'bold 28px Segoe UI';
         ctx.fillStyle = '#cc44ff';
@@ -2966,7 +3014,7 @@ function drawHUD() {
     ctx.textAlign = 'left';
     ctx.font = '10px Segoe UI';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText('WASD:이동 | 좌클릭:사격 | 우클릭:조준/낫대시 | C:슬라이딩 | F:근접 | 1~4:무기 | R:재장전', 20, H-10);
+    ctx.fillText('WASD:이동 | 좌클릭:사격 | 우클릭:조준 | C:슬라이딩 | F:근접 | 1:주무기 2:보조 | R:재장전', 20, H-10);
 }
 
 function getSkinPalette(skin) {
@@ -3008,6 +3056,23 @@ const weaponModelConfigs = [
         adsPos: new THREE.Vector3(0.0, -0.12, -0.40),
         hasArm: true,
         armCamOffset: new THREE.Vector3(-0.06, 0, 0) // 카메라 공간에서 왼쪽으로 이동
+    },
+    { // Uzi (보조무기)
+        path: 'models/uzi_submachine_gun.glb',
+        scale: 0.50,
+        rotOffset: new THREE.Euler(0, Math.PI/2, 0),
+        idlePos: new THREE.Vector3(0.18, -0.18, -0.35),
+        adsPos: new THREE.Vector3(0.0, -0.12, -0.38),
+        hasArm: true
+    },
+    { // 리볼버 (보조무기)
+        path: 'models/38_special_revolver.glb',
+        scale: 0.0015,
+        sketchfabRot: [0, 0, 0],
+        rotOffset: new THREE.Euler(-Math.PI/2, Math.PI, 0),
+        idlePos: new THREE.Vector3(0.18, -0.18, -0.35),
+        adsPos: new THREE.Vector3(0.0, -0.12, -0.38),
+        hasArm: true
     }
 ];
 let weaponModelsLoaded = false;
@@ -3091,10 +3156,11 @@ function initWeapon3DModels() {
             const model = gltf.scene;
             model.scale.setScalar(cfg.scale);
 
-            // Sketchfab 모델 회전 정규화 (-PI/2, 0, 0 = Y-up 표준)
+            // Sketchfab 모델 회전 정규화
+            const sfRot = cfg.sketchfabRot || [-Math.PI/2, 0, 0];
             model.traverse(child => {
                 if (child.name === 'Sketchfab_model') {
-                    child.rotation.set(-Math.PI/2, 0, 0);
+                    child.rotation.set(sfRot[0], sfRot[1], sfRot[2]);
                 }
             });
 
@@ -3363,7 +3429,7 @@ function drawTitle() {
     ctx.font = '14px Segoe UI';
     ctx.fillStyle = '#666';
     ctx.fillText('WASD: 이동 | 마우스: 조준 | 좌클릭: 사격 | R: 재장전', W/2, H/2 + 130);
-    ctx.fillText('우클릭: 스코프 | Tab: 스코어보드 | Shift: 대시', W/2, H/2 + 150);
+    ctx.fillText('우클릭: 스코프 | 1: 주무기 | 2: 보조무기 | Tab: 스코어보드', W/2, H/2 + 150);
 }
 
 // ====== SKIN SELECT SCREEN ======
@@ -3707,6 +3773,78 @@ function drawClassSelect() {
     });
 }
 
+function drawSecondarySelect() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+    canvas.style.cursor = 'default';
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 36px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('보조 무기 선택', W/2, 50);
+
+    ctx.font = '16px Segoe UI';
+    ctx.fillStyle = '#aaa';
+    const cls = classes[player.selectedClass];
+    ctx.fillText(`${cls.name} 클래스 | 주무기: ${weapons[cls.weapon].name}`, W/2, 80);
+    ctx.fillText('클릭 또는 1~2 키를 눌러 선택하세요 (ESC: 뒤로)', W/2, 105);
+
+    const cardW = 240, cardH = 380, gap = 40;
+    const startX = W/2 - (2 * cardW + gap) / 2;
+
+    secondaryWeapons.forEach((sec, i) => {
+        const x = startX + i * (cardW + gap);
+        const y = 140;
+        const w = weapons[sec.weaponIdx];
+
+        const hovered = canvasMouseX >= x && canvasMouseX <= x+cardW && canvasMouseY >= y && canvasMouseY <= y+cardH;
+        ctx.fillStyle = hovered ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
+        ctx.strokeStyle = sec.color;
+        ctx.lineWidth = hovered ? 3 : 2;
+        ctx.fillRect(x, y, cardW, cardH);
+        ctx.strokeRect(x, y, cardW, cardH);
+        if(hovered) canvas.style.cursor = 'pointer';
+
+        // Number
+        ctx.font = 'bold 28px Segoe UI';
+        ctx.fillStyle = sec.color;
+        ctx.fillText((i+1)+'', x+cardW/2, y+40);
+
+        // Name
+        ctx.font = 'bold 24px Segoe UI';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(sec.name, x+cardW/2, y+80);
+
+        // Weapon icon (big)
+        ctx.font = '48px Segoe UI';
+        ctx.fillStyle = sec.color;
+        ctx.fillText('🔫', x+cardW/2, y+140);
+
+        // Desc
+        ctx.font = '14px Segoe UI';
+        ctx.fillStyle = '#ccc';
+        ctx.fillText(sec.desc, x+cardW/2, y+175);
+
+        // Stats
+        ctx.textAlign = 'left';
+        ctx.font = '13px Segoe UI';
+        const stats = [
+            `💥 데미지: ${w.damage}`,
+            `🔥 연사: ${w.auto ? '자동' : '반자동'}`,
+            `⚡ 발사 속도: ${Math.round(60/w.fireRate)}발/초`,
+            `🎯 사거리: ${w.range}m`,
+            `📦 탄약: ${sec.ammo}발`,
+            `🔄 재장전: ${(w.reloadSpeed/60).toFixed(1)}초`,
+            `↗ 스프레드: ${(w.spread*100).toFixed(1)}`
+        ];
+        stats.forEach((s,j) => {
+            ctx.fillStyle = '#aaa';
+            ctx.fillText(s, x+20, y+210+j*22);
+        });
+        ctx.textAlign = 'center';
+    });
+}
+
 function drawDead() {
     ctx.fillStyle = 'rgba(150,0,0,0.4)';
     ctx.fillRect(0,0,W,H);
@@ -3918,7 +4056,7 @@ function update() {
         if(player.reloadTime > 0) {
             player.reloadTime--;
             if(player.reloadTime <= 0) {
-                player.ammo[player.weapon] = player.maxAmmo[player.weapon];
+                player.ammo[player.currentSlot] = player.maxAmmo[player.currentSlot];
             }
         }
 
@@ -4054,6 +4192,7 @@ function render() {
     else if(gameState === 'lobby') { drawLobby(); }
     else if(gameState === 'waiting') { drawWaiting(); }
     else if(gameState === 'classSelect') { drawClassSelect(); }
+    else if(gameState === 'secondarySelect') { drawSecondarySelect(); }
     else if(gameState === 'skinSelect') { drawSkinSelect(); }
     else {
         // 3D 적 모델 동기화 + 맵 렌더링
@@ -4192,6 +4331,10 @@ if(isMobile){
     slots.forEach((s,i)=>{
       s.classList.toggle('active', player.currentSlot===i);
       if(i===0) s.textContent = weaponClassIcons[player.selectedClass]||'🔫';
+      if(i===1) {
+        const secWpn = weapons[player.weaponSlots[1]];
+        s.textContent = secWpn ? '🔫' : '🔫';
+      }
     });
   }
 
