@@ -160,8 +160,8 @@ mapRenderer.toneMappingExposure = 1.0;
 mapRenderer.outputEncoding = THREE.sRGBEncoding;
 
 const mapScene = new THREE.Scene();
-mapScene.background = new THREE.Color(0x87CEEB); // 밝은 하늘색
-mapScene.fog = new THREE.Fog(0x87CEEB, 600, 2000); // 밝은 안개
+mapScene.background = new THREE.Color(0xd4c8a0); // 천장과 같은 색 (하늘 안 보임)
+mapScene.fog = new THREE.Fog(0xd4c8a0, 600, 2000); // 안개도 동일
 
 const mapCamera = new THREE.PerspectiveCamera(75, W / H, 0.5, 2000);
 
@@ -275,6 +275,24 @@ mapLoader.load('models/de_dust2_-_cs_map.glb', (gltf) => {
         }
     });
     console.log(`[3D맵] 충돌 메쉬: ${mapCollisionMeshes.length}개`);
+
+    // 맵 전체를 덮는 천장 추가 (하늘이 안 보이게)
+    const ceilBox = new THREE.Box3().setFromObject(mapModel);
+    const ceilSize = ceilBox.getSize(new THREE.Vector3());
+    const ceilCenter = ceilBox.getCenter(new THREE.Vector3());
+    const ceilGeo = new THREE.PlaneGeometry(ceilSize.x * 1.5, ceilSize.z * 1.5);
+    // 맵 텍스처와 어울리는 밝은 사암/콘크리트 색상
+    const ceilMat = new THREE.MeshStandardMaterial({
+        color: 0xd4c8a0,
+        roughness: 0.9,
+        metalness: 0.0,
+        side: THREE.DoubleSide
+    });
+    const ceilMesh = new THREE.Mesh(ceilGeo, ceilMat);
+    ceilMesh.rotation.x = Math.PI / 2; // 수평으로
+    ceilMesh.position.set(ceilCenter.x, ceilBox.max.y + 5, ceilCenter.z); // 맵 최상단 약간 위
+    mapScene.add(ceilMesh);
+    console.log(`[3D맵] 천장 추가 높이: ${(ceilBox.max.y + 5).toFixed(1)}`);
 }, undefined, (err) => console.error('[3D맵] 로드 실패:', err));
 
 // 3D 맵 충돌 시스템
@@ -1457,10 +1475,14 @@ function selectSecondary(wpnIdx) {
 }
 
 function findSafeSpawn() {
-    // 적에게서 가장 먼 스폰 포인트를 찾기
+    // 적에게서 가장 먼 스폰 포인트를 찾기 + 맵 안 검증
     let bestSpawn = spawnPoints[0];
     let bestMinDist = 0;
     for(const sp of spawnPoints) {
+        // 맵 바닥이 있는지 확인 (맵 밖이면 스킵)
+        const floorH = getFloorHeight(sp.x, sp.z);
+        if(floorH === -Infinity) continue;
+
         let minDist = Infinity;
         for(const e of enemies) {
             if(e.hp <= 0) continue;
@@ -1521,10 +1543,17 @@ function meleeAttack() {
 
 function respawn() {
     const sp = findSafeSpawn();
-    player.x = sp.x + (Math.random()-0.5)*20;
-    player.z = sp.z + (Math.random()-0.5)*20;
-    // 3D 맵 바닥 높이에 맞춰 스폰
-    const spawnFloor = getFloorHeight(player.x, player.z);
+    // 스폰 위치에서 바닥이 있는 곳을 찾기 (최대 5번 시도)
+    let sx, sz, spawnFloor;
+    for(let t = 0; t < 5; t++) {
+        sx = sp.x + (Math.random()-0.5)*20;
+        sz = sp.z + (Math.random()-0.5)*20;
+        spawnFloor = getFloorHeight(sx, sz);
+        if(spawnFloor !== -Infinity) break;
+    }
+    if(spawnFloor === -Infinity) { sx = 0; sz = 0; spawnFloor = getFloorHeight(0, 0); }
+    player.x = sx;
+    player.z = sz;
     player.y = (spawnFloor !== -Infinity) ? spawnFloor : 0;
     player.hp = player.maxHp;
     player.armor = classes[player.selectedClass].armor;
@@ -4114,6 +4143,17 @@ function update() {
             moveWithCollision(player, mx * spd, mz * spd, 5);
         }
 
+        // 맵 밖 이탈 방지: 바닥이 없는 곳으로 이동하면 되돌리기
+        const _prevX = player.x, _prevZ = player.z;
+        const _checkFloor = getFloorHeight(player.x, player.z, player.y);
+        if (_checkFloor === -Infinity && mapCollisionMeshes.length > 0) {
+            player.x = player._safeX || 0;
+            player.z = player._safeZ || 0;
+        } else {
+            player._safeX = player.x;
+            player._safeZ = player.z;
+        }
+
         // Jump
         if(keys['Space'] && player.onGround) {
             player.vy = player.jumpForce;
@@ -4125,6 +4165,8 @@ function update() {
         let floorY = getFloorHeight(player.x, player.z, player.y);
         if (floorY === -Infinity) floorY = 0; // 바닥 못 찾으면 0
         if(player.y <= floorY) { player.y = floorY; player.vy = 0; player.onGround = true; }
+        // 낙하 방지: y가 너무 낮으면 리스폰
+        if(player.y < -50) { respawn(); }
 
         // Spawn protection countdown
         if(player.spawnProtection > 0) {
