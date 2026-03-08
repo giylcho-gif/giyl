@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="screen-orientation" content="landscape">
+<meta name="x5-orientation" content="landscape">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>라이벌 FPS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -22,52 +26,65 @@ canvas {
     max-height:100vh;
 }
 @media(min-width:1025px){#fpsControls{display:none!important}}
-@media(max-width:768px){
+@media(max-width:1024px){
   body{flex-direction:column;justify-content:flex-start;align-items:center}
-  canvas{max-height:52vh!important;max-width:100vw!important;border-radius:0!important;box-shadow:none!important}
+  canvas{max-height:100vh!important;max-width:100vw!important;border-radius:0!important;box-shadow:none!important}
 }
-/* ===== 모바일 FPS HUD ===== */
-#fpsControls{display:none;position:fixed;bottom:0;left:0;right:0;height:48vh;z-index:1000;touch-action:none;pointer-events:none}
+/* ===== 모바일 FPS HUD - 가로 풀스크린 오버레이 ===== */
+#fpsControls{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;touch-action:none;pointer-events:none}
 
-/* ── 이동 조이스틱 - 좌측 상단(높이 올림) ── */
-.fps-joy{position:absolute;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);pointer-events:auto;touch-action:none}
-.fps-joy-knob{position:absolute;width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.15);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-#fps-joy-left{left:14px;top:4px}
-#fps-joy-left .fps-joy-knob{background:rgba(100,180,255,0.25);border-color:rgba(100,180,255,0.2)}
+/* ── 이동 조이스틱 - 좌측 하단 ── */
+.fps-joy{position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none}
+.fps-joy-knob{position:absolute;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.25);border:2px solid rgba(255,255,255,0.2);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+#fps-joy-left{left:16px;bottom:24px}
+#fps-joy-left .fps-joy-knob{background:rgba(100,180,255,0.3);border-color:rgba(100,180,255,0.25)}
 
-/* ── 시점 조이스틱 - 우측 상단(높이 올림) ── */
-#fps-joy-right{right:14px;top:4px}
+/* ── 시점 조이스틱 - 우측 하단 ── */
+#fps-joy-right{right:16px;bottom:24px}
 
-/* ── ★ 사격 버튼 - 가운데 크게 ── */
-#fps-shoot{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:50%;background:radial-gradient(circle,rgba(255,60,60,0.65),rgba(200,20,20,0.45));border:3px solid rgba(255,100,100,0.5);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:30px;box-shadow:0 0 24px rgba(255,40,40,0.25)}
-#fps-shoot:active{background:radial-gradient(circle,rgba(255,80,80,0.95),rgba(255,30,30,0.8));transform:translate(-50%,-50%) scale(0.9);box-shadow:0 0 36px rgba(255,40,40,0.5)}
+/* ── 원형 버튼 공통 ── */
+.fps-circle-btn{position:absolute;border-radius:50%;pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;font-weight:700;-webkit-tap-highlight-color:transparent}
 
-/* ── 점프 - 사격 왼쪽 위, 겹치지 않게 ── */
-#fps-jump{position:absolute;left:50%;top:45%;transform:translate(calc(-50% - 72px),calc(-50% - 20px));width:46px;height:46px;border-radius:50%;background:rgba(80,140,255,0.25);border:1.5px solid rgba(80,140,255,0.2);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.6);font-size:15px}
+/* ── ★ 사격 버튼 - 우측 중앙 크게 ── */
+#fps-shoot{width:80px;height:80px;right:160px;bottom:50px;background:rgba(255,60,60,0.5);border:3px solid rgba(255,100,100,0.6);color:#fff;font-size:28px;box-shadow:0 0 20px rgba(255,40,40,0.3)}
+#fps-shoot:active{background:rgba(255,80,80,0.85);transform:scale(0.92);box-shadow:0 0 30px rgba(255,40,40,0.5)}
+
+/* ── 점프 - 우측 사격 위 ── */
+#fps-jump{width:52px;height:52px;right:172px;bottom:146px;background:rgba(80,140,255,0.25);border:2px solid rgba(80,140,255,0.3);color:rgba(255,255,255,0.7);font-size:18px}
 #fps-jump:active{background:rgba(80,140,255,0.65);color:#fff}
 
-/* ── Save & Quit - 사격 아래 ── */
-#fps-savequit{position:absolute;left:50%;transform:translateX(-50%);top:calc(45% + 56px);height:28px;padding:0 14px;border-radius:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.35);font-size:9px;font-weight:700;letter-spacing:0.5px}
-#fps-savequit:active{background:rgba(255,80,80,0.4);color:#fff;border-color:rgba(255,80,80,0.4)}
+/* ── 조준(ADS) - 사격 왼쪽 ── */
+#fps-ads{width:52px;height:52px;right:252px;bottom:58px;background:rgba(180,100,255,0.2);border:2px solid rgba(180,100,255,0.3);color:rgba(255,255,255,0.6);font-size:13px}
+#fps-ads:active,#fps-ads.on{background:rgba(180,100,255,0.6);color:#fff}
 
-/* ── 보조 버튼 - 맨 아래 한 줄 ── */
-.fps-sub{pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:9px;font-weight:700;position:absolute;border-radius:8px;width:52px;height:26px;bottom:6px}
-.fps-sub:active{color:#fff}
-#fps-reload{left:8px;background:rgba(255,200,50,0.1);border:1px solid rgba(255,200,50,0.1)}
-#fps-reload:active{background:rgba(255,200,50,0.5)}
-#fps-dash{left:66px;background:rgba(255,150,50,0.1);border:1px solid rgba(255,150,50,0.1)}
-#fps-dash:active{background:rgba(255,150,50,0.5)}
-#fps-slide{left:124px;background:rgba(100,200,255,0.1);border:1px solid rgba(100,200,255,0.1)}
-#fps-slide:active{background:rgba(100,200,255,0.5)}
-#fps-grenade{right:64px;background:rgba(80,200,80,0.1);border:1px solid rgba(80,200,80,0.1)}
-#fps-grenade:active{background:rgba(80,200,80,0.5)}
-#fps-ads{right:8px;background:rgba(180,100,255,0.1);border:1px solid rgba(180,100,255,0.1)}
-#fps-ads:active,#fps-ads.on{background:rgba(180,100,255,0.5);color:#fff}
+/* ── 장전 - 좌측 상단 ── */
+#fps-reload{width:44px;height:44px;left:160px;bottom:60px;background:rgba(255,200,50,0.15);border:2px solid rgba(255,200,50,0.2);color:rgba(255,255,255,0.5);font-size:11px}
+#fps-reload:active{background:rgba(255,200,50,0.6);color:#fff}
 
-/* ── 무기 전환 바 ── */
-.fps-weapon-bar{position:absolute;bottom:38px;left:50%;transform:translateX(-50%);display:flex;gap:3px;pointer-events:auto;touch-action:none}
-.fps-wslot{width:36px;height:24px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:12px}
-.fps-wslot.active{background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.4);color:#fff}
+/* ── 대시 - 좌측 조이스틱 위 ── */
+#fps-dash{width:44px;height:44px;left:50px;bottom:160px;background:rgba(255,150,50,0.15);border:2px solid rgba(255,150,50,0.2);color:rgba(255,255,255,0.5);font-size:11px}
+#fps-dash:active{background:rgba(255,150,50,0.6);color:#fff}
+
+/* ── 슬라이드 - 대시 오른쪽 ── */
+#fps-slide{width:44px;height:44px;left:104px;bottom:160px;background:rgba(100,200,255,0.15);border:2px solid rgba(100,200,255,0.2);color:rgba(255,255,255,0.5);font-size:10px}
+#fps-slide:active{background:rgba(100,200,255,0.6);color:#fff}
+
+/* ── 수류탄 - 우측 상단 ── */
+#fps-grenade{width:44px;height:44px;right:80px;bottom:150px;background:rgba(80,200,80,0.15);border:2px solid rgba(80,200,80,0.2);color:rgba(255,255,255,0.5);font-size:15px}
+#fps-grenade:active{background:rgba(80,200,80,0.6);color:#fff}
+
+/* ── 근접공격 - 수류탄 왼쪽 ── */
+#fps-melee{width:44px;height:44px;right:134px;bottom:150px;background:rgba(200,100,255,0.15);border:2px solid rgba(200,100,255,0.2);color:rgba(255,255,255,0.5);font-size:15px}
+#fps-melee:active{background:rgba(200,100,255,0.6);color:#fff}
+
+/* ── Save & Quit - 좌측 상단 작게 ── */
+#fps-savequit{position:absolute;left:10px;top:10px;height:26px;padding:0 10px;border-radius:13px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:9px;font-weight:700}
+#fps-savequit:active{background:rgba(255,80,80,0.5);color:#fff}
+
+/* ── 무기 전환 - 우측 상단 가로 ── */
+.fps-weapon-bar{position:absolute;top:10px;right:10px;display:flex;gap:4px;pointer-events:auto;touch-action:none}
+.fps-wslot{width:40px;height:32px;border-radius:8px;background:rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:14px}
+.fps-wslot.active{background:rgba(255,200,50,0.3);border-color:rgba(255,200,50,0.6);color:#fff}
 #crosshair {
     position:fixed; pointer-events:none; z-index:999;
     width:30px; height:30px;
@@ -82,27 +99,27 @@ canvas {
 <canvas id="weaponCanvas" style="position:absolute;top:0;left:0;pointer-events:none;border-radius:8px;"></canvas>
 </div>
 <div id="fpsControls">
-  <!-- 이동 조이스틱 (좌) -->
+  <!-- 이동 조이스틱 (좌하단) -->
   <div class="fps-joy" id="fps-joy-left"><div class="fps-joy-knob"></div></div>
-  <!-- 시점 조이스틱 (우) -->
+  <!-- 시점 조이스틱 (우하단) -->
   <div class="fps-joy" id="fps-joy-right"><div class="fps-joy-knob"></div></div>
-  <!-- 무기바 -->
+  <!-- 무기바 (우상단) -->
   <div class="fps-weapon-bar" id="fpsWeaponBar">
     <div class="fps-wslot active" data-slot="0">🔫</div>
     <div class="fps-wslot" data-slot="1">🔫</div>
     <div class="fps-wslot" data-slot="2">🗡️</div>
     <div class="fps-wslot" data-slot="3">💣</div>
   </div>
-  <!-- 핵심 버튼 -->
-  <div id="fps-shoot">🎯</div>
-  <div id="fps-jump">⬆</div>
-  <div id="fps-savequit">💾 SAVE & QUIT</div>
-  <!-- 보조 버튼 -->
-  <div class="fps-sub" id="fps-reload">장전</div>
-  <div class="fps-sub" id="fps-dash">대시</div>
-  <div class="fps-sub" id="fps-slide">슬라</div>
-  <div class="fps-sub" id="fps-grenade">수류</div>
-  <div class="fps-sub" id="fps-ads">조준</div>
+  <!-- 원형 버튼들 -->
+  <div class="fps-circle-btn" id="fps-shoot">🎯</div>
+  <div class="fps-circle-btn" id="fps-jump">⬆</div>
+  <div class="fps-circle-btn" id="fps-ads">🔭</div>
+  <div class="fps-circle-btn" id="fps-reload">R</div>
+  <div class="fps-circle-btn" id="fps-dash">⚡</div>
+  <div class="fps-circle-btn" id="fps-slide">C</div>
+  <div class="fps-circle-btn" id="fps-grenade">💣</div>
+  <div class="fps-circle-btn" id="fps-melee">🗡</div>
+  <div id="fps-savequit">⏸</div>
 </div>
 <script>
 const canvas = document.getElementById('c');
@@ -637,6 +654,23 @@ let yaw = 0, pitch = 0;
 const SENSITIVITY = 0.0008;
 let frameCount = 0;
 let isMobile = (('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 1024);
+
+// 모바일: 가로 모드 강제 + 캔버스 풀스크린
+if(isMobile) {
+    try { screen.orientation.lock('landscape').catch(()=>{}); } catch(e) {}
+    document.body.style.overflow = 'hidden';
+    const container = document.getElementById('canvasContainer');
+    container.style.width = '100vw';
+    container.style.height = '100vh';
+    [canvas, document.getElementById('mapCanvas'), document.getElementById('weaponCanvas')].forEach(c => {
+        c.style.maxWidth = '100vw';
+        c.style.maxHeight = '100vh';
+        c.style.width = '100vw';
+        c.style.height = '100vh';
+        c.style.borderRadius = '0';
+        c.style.boxShadow = 'none';
+    });
+}
 
 // ====== NETWORK ======
 let ws = null;
@@ -4615,6 +4649,22 @@ if(isMobile){
     // 즉시 투척
     setTimeout(()=>playerShoot(),50);
   },{passive:false});
+
+  // === 근접공격 버튼 ===
+  const meleeBtn = document.getElementById('fps-melee');
+  if(meleeBtn) {
+    meleeBtn.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      if(gameState!=='playing')return;
+      if(player.meleeCooldown <= 0 && !player.meleeActive) {
+        player.meleeActive = true;
+        player.meleeTime = 12;
+        player.meleeCooldown = 25;
+        player.spawnProtection = 0;
+        meleeAttack();
+      }
+    },{passive:false});
+  }
 
   // === Save & Quit 버튼 ===
   document.getElementById('fps-savequit').addEventListener('pointerdown',e=>{
