@@ -231,7 +231,7 @@ function syncEnemy3D() {
             const e = aliveEnemies[i];
             slot.model.visible = true;
             slot.active = true;
-            const floorH = getFloorHeight(e.x, e.z);
+            const floorH = getFloorHeight(e.x, e.z, e.y);
             const ey = (floorH !== -Infinity) ? floorH : e.y;
             slot.model.position.set(e.x, ey, e.z);
             slot.model.rotation.y = Math.PI - e.yaw;
@@ -284,8 +284,21 @@ const _wallRaycaster = new THREE.Raycaster();
 const _downDir = new THREE.Vector3(0, -1, 0);
 
 // 바닥 높이 감지 (레이캐스트)
-function getFloorHeight(x, z) {
+// currentY가 주어지면 플레이어 높이 근처의 바닥을 찾음 (통로/터널 통과 지원)
+function getFloorHeight(x, z, currentY) {
     if (mapCollisionMeshes.length === 0) return 0;
+
+    if (currentY !== undefined) {
+        // 플레이어 머리 위(+15)에서 아래로 레이캐스트
+        // 통로 안에 있으면 지붕이 아닌 통로 바닥을 감지
+        const headY = currentY + 15;
+        _floorRaycaster.set(new THREE.Vector3(x, headY, z), _downDir);
+        _floorRaycaster.far = headY + 100;
+        const hits = _floorRaycaster.intersectObjects(mapCollisionMeshes, false);
+        if (hits.length > 0) return hits[0].point.y;
+    }
+
+    // fallback: 높은 곳에서 레이캐스트 (스폰 등 초기 배치용)
     _floorRaycaster.set(new THREE.Vector3(x, 300, z), _downDir);
     _floorRaycaster.far = 400;
     const hits = _floorRaycaster.intersectObjects(mapCollisionMeshes, false);
@@ -2050,8 +2063,8 @@ function updateBot(bot) {
         bot.stuckCounter = 0;
     }
 
-    // 봇 바닥 높이 추적 (3D 맵)
-    const botFloor = getFloorHeight(bot.x, bot.z);
+    // 봇 바닥 높이 추적 (3D 맵) - 현재 높이 전달로 통로 통과 지원
+    const botFloor = getFloorHeight(bot.x, bot.z, bot.y);
     if (botFloor !== -Infinity) {
         bot.y = botFloor;
     }
@@ -4108,8 +4121,8 @@ function update() {
         }
         player.vy -= 0.4; // gravity
         player.y += player.vy;
-        // 3D 맵 바닥 충돌 (레이캐스트)
-        let floorY = getFloorHeight(player.x, player.z);
+        // 3D 맵 바닥 충돌 (레이캐스트) - 현재 높이 전달로 통로 통과 지원
+        let floorY = getFloorHeight(player.x, player.z, player.y);
         if (floorY === -Infinity) floorY = 0; // 바닥 못 찾으면 0
         if(player.y <= floorY) { player.y = floorY; player.vy = 0; player.onGround = true; }
 
