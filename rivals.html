@@ -3041,7 +3041,7 @@ const gltfLoader = new THREE.GLTFLoader();
 const weaponModelConfigs = [
     { // AK-47 (배럴 LOCAL X축)
         path: 'models/ak47.glb',
-        scale: 0.50,
+        scale: 0.75,
         rotOffset: new THREE.Euler(0, Math.PI/2, 0),
         idlePos: new THREE.Vector3(0.18, -0.18, -0.35),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.38),
@@ -3050,7 +3050,7 @@ const weaponModelConfigs = [
     null, // 특수소총 제거됨
     { // 스나이퍼 (배럴 LOCAL Z축)
         path: 'models/sniper.glb',
-        scale: 0.010,
+        scale: 0.015,
         rotOffset: new THREE.Euler(0, Math.PI, 0),
         idlePos: new THREE.Vector3(0.18, -0.18, -0.38),
         adsPos: new THREE.Vector3(0.0, -0.12, -0.40),
@@ -3069,9 +3069,9 @@ const weaponModelConfigs = [
         path: 'models/38_special_revolver.glb',
         scale: 0.002,
         sketchfabRot: [0, 0, 0],
-        rotOffset: new THREE.Euler(0, Math.PI/2, -Math.PI/2),
-        idlePos: new THREE.Vector3(0.18, -0.18, -0.80),
-        adsPos: new THREE.Vector3(0.0, -0.12, -0.75),
+        rotOffset: new THREE.Euler(0, Math.PI * 0.65, -Math.PI/2),
+        idlePos: new THREE.Vector3(0.18, -0.18, -1.05),
+        adsPos: new THREE.Vector3(0.0, -0.12, -0.95),
         hasArm: true
     }
 ];
