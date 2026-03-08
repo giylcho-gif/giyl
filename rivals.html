@@ -2459,12 +2459,91 @@ function drawEnemy(enemy) {
     skinG2.addColorStop(0, '#d4a574'); skinG2.addColorStop(1, '#c09060');
     ctx.fillStyle = skinG2;
     drawRoundRect(-armW/2, armH*0.45, armW, armH*0.5, 0.8*s);
-    // 손에 무기
-    ctx.fillStyle = '#333';
-    ctx.fillRect(-armW*0.3, armH*0.7, armW*1.4, armW*0.3);
-    ctx.fillStyle = '#555';
-    const gunLen = 5 * s;
-    ctx.fillRect(facingRight ? armW*0.4 : -armW*0.4 - gunLen, armH*0.6, gunLen, armW*0.25);
+    // 손에 무기 (무기 종류별)
+    const wpnIdx = enemy.weapon;
+    const dir = facingRight ? 1 : -1;
+    const handY = armH * 0.75;
+
+    if(wpnIdx === 0) {
+        // AK-47 - 긴 소총
+        const gunLen = 12 * s, gunH = 1.8 * s;
+        // 총몸
+        ctx.fillStyle = '#3a3028';
+        ctx.fillRect(dir > 0 ? 0 : -gunLen, handY - gunH/2, gunLen, gunH);
+        // 총열
+        ctx.fillStyle = '#555';
+        ctx.fillRect(dir > 0 ? gunLen*0.6 : -gunLen*0.9, handY - gunH*0.3, gunLen*0.5, gunH*0.5);
+        // 탄창
+        ctx.fillStyle = '#c06820';
+        ctx.fillRect(dir > 0 ? gunLen*0.2 : -gunLen*0.45, handY + gunH*0.3, gunLen*0.15, gunH*1.5);
+        // 개머리판
+        ctx.fillStyle = '#5a4030';
+        ctx.fillRect(dir > 0 ? -gunLen*0.35 : gunLen*0.05, handY - gunH*0.6, gunLen*0.35, gunH*1.2);
+        // 그립
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, handY, armW*0.5, armW*0.8);
+    } else if(wpnIdx === 2) {
+        // 스나이퍼 - 매우 긴 소총 + 스코프
+        const gunLen = 16 * s, gunH = 1.5 * s;
+        ctx.fillStyle = '#2a3a2a';
+        ctx.fillRect(dir > 0 ? 0 : -gunLen, handY - gunH/2, gunLen, gunH);
+        // 총열
+        ctx.fillStyle = '#666';
+        ctx.fillRect(dir > 0 ? gunLen*0.7 : -gunLen, handY - gunH*0.25, gunLen*0.4, gunH*0.4);
+        // 스코프
+        ctx.fillStyle = '#222';
+        ctx.beginPath();
+        ctx.arc(dir > 0 ? gunLen*0.4 : -gunLen*0.4, handY - gunH*1.2, gunH*0.8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#4af';
+        ctx.beginPath();
+        ctx.arc(dir > 0 ? gunLen*0.4 : -gunLen*0.4, handY - gunH*1.2, gunH*0.4, 0, Math.PI*2);
+        ctx.fill();
+        // 개머리판
+        ctx.fillStyle = '#3a4a3a';
+        ctx.fillRect(dir > 0 ? -gunLen*0.3 : gunLen*0.05, handY - gunH*0.7, gunLen*0.3, gunH*1.4);
+        // 그립
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, handY, armW*0.5, armW*0.8);
+    } else if(wpnIdx === 3) {
+        // Uzi - 짧고 뚱뚱한 SMG
+        const gunLen = 7 * s, gunH = 2.2 * s;
+        ctx.fillStyle = '#222';
+        ctx.fillRect(dir > 0 ? 0 : -gunLen, handY - gunH/2, gunLen, gunH);
+        // 총열
+        ctx.fillStyle = '#555';
+        ctx.fillRect(dir > 0 ? gunLen*0.7 : -gunLen*0.9, handY - gunH*0.2, gunLen*0.35, gunH*0.35);
+        // 탄창
+        ctx.fillStyle = '#333';
+        ctx.fillRect(dir > 0 ? gunLen*0.15 : -gunLen*0.4, handY + gunH*0.3, gunLen*0.15, gunH*1.2);
+        // 그립
+        ctx.fillStyle = '#333';
+        ctx.fillRect(0, handY, armW*0.5, armW*0.7);
+    } else if(wpnIdx === 4) {
+        // 리볼버 - 짧은 권총
+        const gunLen = 6 * s, gunH = 2.5 * s;
+        // 프레임
+        ctx.fillStyle = '#666';
+        ctx.fillRect(dir > 0 ? 0 : -gunLen, handY - gunH*0.3, gunLen*0.7, gunH*0.6);
+        // 총열
+        ctx.fillStyle = '#888';
+        ctx.fillRect(dir > 0 ? gunLen*0.5 : -gunLen*0.8, handY - gunH*0.15, gunLen*0.45, gunH*0.3);
+        // 실린더
+        ctx.fillStyle = '#777';
+        ctx.beginPath();
+        ctx.arc(dir > 0 ? gunLen*0.3 : -gunLen*0.3, handY, gunH*0.35, 0, Math.PI*2);
+        ctx.fill();
+        // 그립
+        ctx.fillStyle = '#5a3a20';
+        ctx.fillRect(dir > 0 ? -armW*0.1 : -armW*0.3, handY + gunH*0.1, armW*0.6, armW*1.2);
+    } else {
+        // 기본 (fallback)
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-armW*0.3, handY, armW*1.4, armW*0.3);
+        ctx.fillStyle = '#555';
+        const gunLen = 5 * s;
+        ctx.fillRect(dir > 0 ? armW*0.4 : -armW*0.4 - gunLen, handY - armW*0.1, gunLen, armW*0.25);
+    }
     ctx.restore();
 
     // ===== 목 =====
