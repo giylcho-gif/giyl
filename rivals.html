@@ -31,59 +31,57 @@ canvas {
   canvas{max-height:100vh!important;max-width:100vw!important;border-radius:0!important;box-shadow:none!important}
 }
 /* ===== 모바일 FPS HUD - 가로 풀스크린 오버레이 ===== */
-#fpsControls{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;touch-action:none;pointer-events:none}
+#fpsControls{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1000;touch-action:none;pointer-events:none;overflow:hidden}
 
-/* ── 이동 조이스틱 - 좌측 하단 ── */
-.fps-joy{position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none}
-.fps-joy-knob{position:absolute;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.25);border:2px solid rgba(255,255,255,0.2);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-#fps-joy-left{left:16px;bottom:24px}
+/* ── 조이스틱 ── */
+.fps-joy{position:absolute;width:30vh;height:30vh;max-width:130px;max-height:130px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none}
+.fps-joy-knob{position:absolute;width:40%;height:40%;border-radius:50%;background:rgba(255,255,255,0.25);border:2px solid rgba(255,255,255,0.2);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+#fps-joy-left{left:12px;bottom:8px}
 #fps-joy-left .fps-joy-knob{background:rgba(100,180,255,0.3);border-color:rgba(100,180,255,0.25)}
-
-/* ── 시점 조이스틱 - 우측 하단 ── */
-#fps-joy-right{right:16px;bottom:24px}
+#fps-joy-right{right:12px;bottom:8px}
 
 /* ── 원형 버튼 공통 ── */
 .fps-circle-btn{position:absolute;border-radius:50%;pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;font-weight:700;-webkit-tap-highlight-color:transparent}
 
-/* ── ★ 사격 버튼 - 우측 중앙 크게 ── */
-#fps-shoot{width:80px;height:80px;right:160px;bottom:50px;background:rgba(255,60,60,0.5);border:3px solid rgba(255,100,100,0.6);color:#fff;font-size:28px;box-shadow:0 0 20px rgba(255,40,40,0.3)}
-#fps-shoot:active{background:rgba(255,80,80,0.85);transform:scale(0.92);box-shadow:0 0 30px rgba(255,40,40,0.5)}
+/* ── ★ 사격 - 우측 조이스틱 왼쪽 ── */
+#fps-shoot{width:19vh;height:19vh;max-width:76px;max-height:76px;right:calc(12px + 32vh);bottom:12px;background:rgba(255,60,60,0.5);border:3px solid rgba(255,100,100,0.6);color:#fff;font-size:24px;box-shadow:0 0 16px rgba(255,40,40,0.3)}
+#fps-shoot:active{background:rgba(255,80,80,0.85);transform:scale(0.92)}
 
-/* ── 점프 - 우측 사격 위 ── */
-#fps-jump{width:52px;height:52px;right:172px;bottom:146px;background:rgba(80,140,255,0.25);border:2px solid rgba(80,140,255,0.3);color:rgba(255,255,255,0.7);font-size:18px}
+/* ── 점프 - 사격 위 ── */
+#fps-jump{width:13vh;height:13vh;max-width:50px;max-height:50px;right:calc(12px + 35vh);bottom:calc(20px + 20vh);background:rgba(80,140,255,0.25);border:2px solid rgba(80,140,255,0.3);color:rgba(255,255,255,0.7);font-size:15px}
 #fps-jump:active{background:rgba(80,140,255,0.65);color:#fff}
 
-/* ── 조준(ADS) - 사격 왼쪽 ── */
-#fps-ads{width:52px;height:52px;right:252px;bottom:58px;background:rgba(180,100,255,0.2);border:2px solid rgba(180,100,255,0.3);color:rgba(255,255,255,0.6);font-size:13px}
+/* ── 조준 - 사격 왼쪽 ── */
+#fps-ads{width:13vh;height:13vh;max-width:50px;max-height:50px;right:calc(16px + 52vh);bottom:16px;background:rgba(180,100,255,0.2);border:2px solid rgba(180,100,255,0.3);color:rgba(255,255,255,0.6);font-size:11px}
 #fps-ads:active,#fps-ads.on{background:rgba(180,100,255,0.6);color:#fff}
 
-/* ── 장전 - 좌측 상단 ── */
-#fps-reload{width:44px;height:44px;left:160px;bottom:60px;background:rgba(255,200,50,0.15);border:2px solid rgba(255,200,50,0.2);color:rgba(255,255,255,0.5);font-size:11px}
+/* ── 장전 - 좌측 조이스틱 오른쪽 ── */
+#fps-reload{width:12vh;height:12vh;max-width:44px;max-height:44px;left:calc(16px + 32vh);bottom:16px;background:rgba(255,200,50,0.15);border:2px solid rgba(255,200,50,0.2);color:rgba(255,255,255,0.5);font-size:9px}
 #fps-reload:active{background:rgba(255,200,50,0.6);color:#fff}
 
 /* ── 대시 - 좌측 조이스틱 위 ── */
-#fps-dash{width:44px;height:44px;left:50px;bottom:160px;background:rgba(255,150,50,0.15);border:2px solid rgba(255,150,50,0.2);color:rgba(255,255,255,0.5);font-size:11px}
+#fps-dash{width:12vh;height:12vh;max-width:44px;max-height:44px;left:24px;bottom:calc(14px + 32vh);background:rgba(255,150,50,0.15);border:2px solid rgba(255,150,50,0.2);color:rgba(255,255,255,0.5);font-size:9px}
 #fps-dash:active{background:rgba(255,150,50,0.6);color:#fff}
 
 /* ── 슬라이드 - 대시 오른쪽 ── */
-#fps-slide{width:44px;height:44px;left:104px;bottom:160px;background:rgba(100,200,255,0.15);border:2px solid rgba(100,200,255,0.2);color:rgba(255,255,255,0.5);font-size:10px}
+#fps-slide{width:12vh;height:12vh;max-width:44px;max-height:44px;left:calc(30px + 13vh);bottom:calc(14px + 32vh);background:rgba(100,200,255,0.15);border:2px solid rgba(100,200,255,0.2);color:rgba(255,255,255,0.5);font-size:9px}
 #fps-slide:active{background:rgba(100,200,255,0.6);color:#fff}
 
-/* ── 수류탄 - 우측 상단 ── */
-#fps-grenade{width:44px;height:44px;right:80px;bottom:150px;background:rgba(80,200,80,0.15);border:2px solid rgba(80,200,80,0.2);color:rgba(255,255,255,0.5);font-size:15px}
+/* ── 수류탄 - 우측 조이스틱 위 ── */
+#fps-grenade{width:12vh;height:12vh;max-width:44px;max-height:44px;right:24px;bottom:calc(14px + 32vh);background:rgba(80,200,80,0.15);border:2px solid rgba(80,200,80,0.2);color:rgba(255,255,255,0.5);font-size:13px}
 #fps-grenade:active{background:rgba(80,200,80,0.6);color:#fff}
 
-/* ── 근접공격 - 수류탄 왼쪽 ── */
-#fps-melee{width:44px;height:44px;right:134px;bottom:150px;background:rgba(200,100,255,0.15);border:2px solid rgba(200,100,255,0.2);color:rgba(255,255,255,0.5);font-size:15px}
+/* ── 근접 - 수류탄 왼쪽 ── */
+#fps-melee{width:12vh;height:12vh;max-width:44px;max-height:44px;right:calc(30px + 13vh);bottom:calc(14px + 32vh);background:rgba(200,100,255,0.15);border:2px solid rgba(200,100,255,0.2);color:rgba(255,255,255,0.5);font-size:13px}
 #fps-melee:active{background:rgba(200,100,255,0.6);color:#fff}
 
-/* ── Save & Quit - 좌측 상단 작게 ── */
-#fps-savequit{position:absolute;left:10px;top:10px;height:26px;padding:0 10px;border-radius:13px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:9px;font-weight:700}
+/* ── 일시정지 - 좌측 상단 ── */
+#fps-savequit{position:absolute;left:12px;top:8px;height:26px;padding:0 10px;border-radius:13px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:9px;font-weight:700}
 #fps-savequit:active{background:rgba(255,80,80,0.5);color:#fff}
 
-/* ── 무기 전환 - 우측 상단 가로 ── */
-.fps-weapon-bar{position:absolute;top:10px;right:10px;display:flex;gap:4px;pointer-events:auto;touch-action:none}
-.fps-wslot{width:40px;height:32px;border-radius:8px;background:rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:14px}
+/* ── 무기 전환 - 우측 상단 ── */
+.fps-weapon-bar{position:absolute;top:8px;right:12px;display:flex;gap:3px;pointer-events:auto;touch-action:none}
+.fps-wslot{width:36px;height:28px;border-radius:8px;background:rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.4);font-size:13px}
 .fps-wslot.active{background:rgba(255,200,50,0.3);border-color:rgba(255,200,50,0.6);color:#fff}
 #crosshair {
     position:fixed; pointer-events:none; z-index:999;
@@ -114,9 +112,9 @@ canvas {
   <div class="fps-circle-btn" id="fps-shoot">🎯</div>
   <div class="fps-circle-btn" id="fps-jump">⬆</div>
   <div class="fps-circle-btn" id="fps-ads">🔭</div>
-  <div class="fps-circle-btn" id="fps-reload">R</div>
-  <div class="fps-circle-btn" id="fps-dash">⚡</div>
-  <div class="fps-circle-btn" id="fps-slide">C</div>
+  <div class="fps-circle-btn" id="fps-reload">장전</div>
+  <div class="fps-circle-btn" id="fps-dash">대시</div>
+  <div class="fps-circle-btn" id="fps-slide">슬라</div>
   <div class="fps-circle-btn" id="fps-grenade">💣</div>
   <div class="fps-circle-btn" id="fps-melee">🗡</div>
   <div id="fps-savequit">⏸</div>
