@@ -10,6 +10,7 @@
 <title>라이벌 FPS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -120,6 +121,10 @@ canvas {
   <div id="fps-savequit">⏸</div>
 </div>
 <script>
+// Draco 디코더 설정 (압축된 GLB 로드용)
+const _dracoLoader = new THREE.DRACOLoader();
+_dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const W = 960, H = 640;
@@ -202,6 +207,7 @@ let enemyModelScale = 1;
 // GLB 로드 후 인스턴스 생성 (separate parse 방식 - r128 clone 버그 회피)
 fetch('models/sand_soldier.glb').then(r => r.arrayBuffer()).then(buffer => {
     const loader = new THREE.GLTFLoader();
+    loader.setDRACOLoader(_dracoLoader);
     // 먼저 템플릿 파싱으로 크기 측정
     loader.parse(buffer.slice(0), '', (gltf) => {
         enemyModelTemplate = gltf.scene;
@@ -260,6 +266,7 @@ function syncEnemy3D() {
 // GLB 맵 모델 로드
 let mapModel = null;
 const mapLoader = new THREE.GLTFLoader();
+mapLoader.setDRACOLoader(_dracoLoader);
 mapLoader.load('models/de_dust2_-_cs_map.glb', (gltf) => {
     mapModel = gltf.scene;
     // 맵 스케일 조정 (GLB 맵을 게임 좌표계에 맞추기)
@@ -3189,6 +3196,7 @@ function getSkinPalette(skin) {
 
 // ====== 3D 무기 모델 시스템 (GLTFLoader) ======
 const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.setDRACOLoader(_dracoLoader);
 
 // 무기별 3D 모델 설정
 const weaponModelConfigs = [
