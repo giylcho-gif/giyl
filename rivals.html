@@ -1303,7 +1303,7 @@ function handleMouseDown(e) {
     canvasMouseY = coords.y;
 
     if(gameState === 'playing') {
-        if(e.button === 0) shooting = true; // 왼클릭만 사격
+        if(e.button === 0 && !isMobile) shooting = true; // 왼클릭만 사격 (모바일은 전용 버튼)
         if(!mouseLocked) {
             // Save & Quit 버튼 체크
             const sqX = W - 130, sqY = H - 30;
@@ -1359,10 +1359,14 @@ function handleMouseDown(e) {
     } else if(gameState === 'lobby') {
         const btnW = 260, btnH = 60;
         const crX = W/2 - btnW/2, crY = 160, jrY = 260;
+        const backW = 160, backH = 40;
+        const backX = W/2 - backW/2, backY = H - 60;
         if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= crY && coords.y <= crY+btnH) {
             connectToServer(() => { sendMsg({ type: 'create_room' }); });
         } else if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= jrY && coords.y <= jrY+btnH) {
             lobbyMode = 'join'; roomCodeInput = '';
+        } else if(coords.x >= backX && coords.x <= backX+backW && coords.y >= backY && coords.y <= backY+backH) {
+            gameState = 'title'; isOnline = false; lobbyMode = '';
         }
     } else if(gameState === 'classSelect') {
         for(let i = 0; i < 4; i++) {
@@ -1424,45 +1428,8 @@ canvas.addEventListener('touchstart', e => {
     canvasMouseX = coords.x;
     canvasMouseY = coords.y;
 
-    if(gameState === 'title') {
-        // 모바일: 버튼 영역 터치만 인식
-        const btnW = 200, btnH = 50;
-        const soloX = W/2 - btnW - 20, soloY = H/2 - 10;
-        const onX = W/2 + 20, onY = H/2 - 10;
-        const skinBtnW = 200, skinBtnH = 44;
-        const skinX = W/2 - skinBtnW/2, skinY = H/2 + 55;
-        if(coords.x >= soloX && coords.x <= soloX+btnW && coords.y >= soloY && coords.y <= soloY+btnH) {
-            isOnline = false; gameState = 'classSelect';
-        } else if(coords.x >= onX && coords.x <= onX+btnW && coords.y >= onY && coords.y <= onY+btnH) {
-            gameState = 'lobby'; lobbyMode = '';
-            connectToServer();
-        } else if(coords.x >= skinX && coords.x <= skinX+skinBtnW && coords.y >= skinY && coords.y <= skinY+skinBtnH) {
-            gameState = 'skinSelect'; skinSelectWeapon = 0;
-        }
-    } else if(gameState === 'classSelect') {
-        for(let i = 0; i < 4; i++) {
-            const cx = 60 + i * 220, cy = 140, cw = 200, ch = 380;
-            if(coords.x >= cx && coords.x <= cx+cw && coords.y >= cy && coords.y <= cy+ch) {
-                selectClass(i);
-                break;
-            }
-        }
-    } else if(gameState === 'secondarySelect') {
-        for(let i = 0; i < 2; i++) {
-            const cw = 240, ch = 380;
-            const cx = W/2 - (2 * cw + 40) / 2 + i * (cw + 40);
-            const cy = 140;
-            if(coords.x >= cx && coords.x <= cx+cw && coords.y >= cy && coords.y <= cy+ch) {
-                selectSecondary(secondaryWeapons[i].weaponIdx);
-                break;
-            }
-        }
-    } else if(gameState === 'playing') {
-        // 모바일은 전용 사격 버튼 사용, 캔버스 터치로는 사격하지 않음
-        if(!isMobile) shooting = true;
-    } else if(gameState === 'dead' && player.respawnTimer <= 0) {
-        respawn();
-    }
+    // 모바일+PC 터치: handleMouseDown과 동일한 로직
+    handleMouseDown({clientX: touch.clientX, clientY: touch.clientY, button: 0, preventDefault:()=>{}})
 }, {passive:false});
 canvas.addEventListener('touchend', () => { if(!isMobile) shooting = false; });
 
@@ -3799,10 +3766,19 @@ function drawLobby() {
         ctx.fillText('Enter로 참가 | Esc로 취소', W/2, 490);
     }
 
-    // Back button
-    ctx.font = '16px Segoe UI';
-    ctx.fillStyle = '#888';
-    ctx.fillText('Esc: 뒤로가기', W/2, H - 40);
+    // Back button (터치 가능한 버튼으로)
+    const backW = 160, backH = 40;
+    const backX = W/2 - backW/2, backY = H - 60;
+    const backHover = canvasMouseX >= backX && canvasMouseX <= backX+backW && canvasMouseY >= backY && canvasMouseY <= backY+backH;
+    ctx.fillStyle = backHover ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.fillRect(backX, backY, backW, backH);
+    ctx.strokeRect(backX, backY, backW, backH);
+    ctx.font = 'bold 16px Segoe UI';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('← 뒤로가기', W/2, backY + 27);
+    if(backHover) canvas.style.cursor = 'pointer';
 
     // Network message
     if(netMessageTimer > 0) {
