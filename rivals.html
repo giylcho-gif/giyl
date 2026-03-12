@@ -34,11 +34,15 @@ canvas {
 /* ===== 모바일 FPS HUD - 가로 풀스크린 오버레이 ===== */
 #fpsControls{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1000;touch-action:none;pointer-events:none;overflow:hidden}
 
-/* ── 조이스틱 ── */
+/* ── D-pad 화살표 ── */
+#fps-dpad{position:absolute;left:10px;bottom:6px;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:auto;touch-action:none}
+.dpad-row{display:flex;gap:2px;align-items:center}
+.dpad-btn{width:48px;height:48px;border-radius:10px;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.7);font-size:18px;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none}
+.dpad-btn:active,.dpad-btn.pressed{background:rgba(100,180,255,0.5);border-color:rgba(100,180,255,0.6);color:#fff}
+.dpad-center{width:44px;height:44px;background:transparent;border:none}
+/* ── 시점 조이스틱 (우하단) ── */
 .fps-joy{position:absolute;width:30vh;height:30vh;max-width:130px;max-height:130px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.15);pointer-events:auto;touch-action:none}
 .fps-joy-knob{position:absolute;width:40%;height:40%;border-radius:50%;background:rgba(255,255,255,0.25);border:2px solid rgba(255,255,255,0.2);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-#fps-joy-left{left:12px;bottom:8px}
-#fps-joy-left .fps-joy-knob{background:rgba(100,180,255,0.3);border-color:rgba(100,180,255,0.25)}
 #fps-joy-right{right:12px;bottom:8px}
 
 /* ── 원형 버튼 공통 ── */
@@ -98,8 +102,16 @@ canvas {
 <canvas id="weaponCanvas" style="position:absolute;top:0;left:0;pointer-events:none;border-radius:8px;"></canvas>
 </div>
 <div id="fpsControls">
-  <!-- 이동 조이스틱 (좌하단) -->
-  <div class="fps-joy" id="fps-joy-left"><div class="fps-joy-knob"></div></div>
+  <!-- 이동 화살표 (좌하단) -->
+  <div id="fps-dpad">
+    <div class="dpad-btn" id="dpad-up">▲</div>
+    <div class="dpad-row">
+      <div class="dpad-btn" id="dpad-left">◀</div>
+      <div class="dpad-btn dpad-center" id="dpad-center"></div>
+      <div class="dpad-btn" id="dpad-right">▶</div>
+    </div>
+    <div class="dpad-btn" id="dpad-down">▼</div>
+  </div>
   <!-- 시점 조이스틱 (우하단) -->
   <div class="fps-joy" id="fps-joy-right"><div class="fps-joy-knob"></div></div>
   <!-- 무기바 (우상단) -->
@@ -4174,16 +4186,9 @@ function drawScoreboard() {
 // ====== MAIN UPDATE ======
 function update() {
   try {
-    // 모바일: 조이스틱 처리
+    // 모바일: 조이스틱/D-pad 처리
     if(isMobile) {
-      // 이동 조이스틱 → keys 매핑 (데드존 0.2)
-      if(window._mobileJoyLActive) {
-        const lx=window._mobileJoyLx, ly=window._mobileJoyLy;
-        keys['KeyW'] = ly < -0.2;
-        keys['KeyS'] = ly > 0.2;
-        keys['KeyA'] = lx < -0.2;
-        keys['KeyD'] = lx > 0.2;
-      }
+      // D-pad는 직접 keys 설정, 추가 매핑 불필요
       // 시점 조이스틱
       if(window._mobileJoyRActive) {
         yaw += window._mobileJoyRx * 0.04;
@@ -4436,7 +4441,10 @@ function render() {
 
         drawGround();
 
-        // 적 이름표/HP바 비활성화
+        // 3D 모델 로드 안 됐으면 2D로 적 그리기
+        if(!enemyModelTemplate || enemy3DModels.length < MAX_ENEMY_3D) {
+            enemies.forEach(e => { if(e.hp > 0) drawEnemy(e); });
+        }
 
         // Draw bullets
         bullets.forEach(b => {
@@ -4573,39 +4581,43 @@ if(isMobile){
     });
   }
 
-  // === 이동 조이스틱 (왼쪽) ===
-  const joyL=document.getElementById('fps-joy-left');
-  const knobL=joyL.querySelector('.fps-joy-knob');
-  let joyLId=null;
+  // === 이동 D-pad (화살표 버튼) ===
   window._mobileJoyLActive=false;
-  window._mobileJoyLx=0; // -1 ~ 1
+  window._mobileJoyLx=0;
   window._mobileJoyLy=0;
-  joyL.addEventListener('pointerdown',e=>{
-    e.preventDefault();joyLId=e.pointerId;joyL.setPointerCapture(e.pointerId);
-    window._mobileJoyLActive=true;
-    const r=joyL.getBoundingClientRect();
-    const cx=r.left+r.width/2, cy=r.top+r.height/2;
-    let dx=e.clientX-cx, dy=e.clientY-cy;
-    const dist=Math.sqrt(dx*dx+dy*dy), maxR=55;
-    if(dist>maxR){dx=dx/dist*maxR;dy=dy/dist*maxR;}
-    knobL.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    window._mobileJoyLx=dx/maxR;
-    window._mobileJoyLy=dy/maxR;
-  },{passive:false});
-  joyL.addEventListener('pointermove',e=>{
-    if(e.pointerId!==joyLId)return;
-    const r=joyL.getBoundingClientRect();
-    const cx=r.left+r.width/2, cy=r.top+r.height/2;
-    let dx=e.clientX-cx, dy=e.clientY-cy;
-    const dist=Math.sqrt(dx*dx+dy*dy), maxR=55;
-    if(dist>maxR){dx=dx/dist*maxR;dy=dy/dist*maxR;}
-    knobL.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    window._mobileJoyLx=dx/maxR;
-    window._mobileJoyLy=dy/maxR;
+  const dpadMap = {
+    'dpad-up':    {key:'KeyW', x:0, y:-1},
+    'dpad-down':  {key:'KeyS', x:0, y:1},
+    'dpad-left':  {key:'KeyA', x:-1, y:0},
+    'dpad-right': {key:'KeyD', x:1, y:0}
+  };
+  const activeDpad = new Set();
+  function updateDpadKeys() {
+    keys['KeyW']=false;keys['KeyS']=false;keys['KeyA']=false;keys['KeyD']=false;
+    window._mobileJoyLx=0;window._mobileJoyLy=0;
+    window._mobileJoyLActive = activeDpad.size > 0;
+    activeDpad.forEach(id => {
+      const d = dpadMap[id];
+      if(d) { keys[d.key]=true; window._mobileJoyLx+=d.x; window._mobileJoyLy+=d.y; }
+    });
+  }
+  Object.keys(dpadMap).forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault(); el.setPointerCapture(e.pointerId);
+      activeDpad.add(id); el.classList.add('pressed'); updateDpadKeys();
+    },{passive:false});
+    el.addEventListener('pointerup', e => {
+      activeDpad.delete(id); el.classList.remove('pressed'); updateDpadKeys();
+    });
+    el.addEventListener('pointercancel', e => {
+      activeDpad.delete(id); el.classList.remove('pressed'); updateDpadKeys();
+    });
+    el.addEventListener('pointerleave', e => {
+      activeDpad.delete(id); el.classList.remove('pressed'); updateDpadKeys();
+    });
   });
-  const resetL=()=>{joyLId=null;knobL.style.transform='translate(-50%,-50%)';window._mobileJoyLActive=false;window._mobileJoyLx=0;window._mobileJoyLy=0;keys['KeyW']=false;keys['KeyS']=false;keys['KeyA']=false;keys['KeyD']=false;};
-  joyL.addEventListener('pointerup',resetL);
-  joyL.addEventListener('pointercancel',resetL);
 
   // === 시점 조이스틱 (오른쪽) - 오프셋 기반 지속 회전 ===
   const joyR=document.getElementById('fps-joy-right');
