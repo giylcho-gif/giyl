@@ -1425,7 +1425,20 @@ canvas.addEventListener('touchstart', e => {
     canvasMouseY = coords.y;
 
     if(gameState === 'title') {
-        gameState = 'classSelect';
+        // 모바일: 버튼 영역 터치만 인식
+        const btnW = 200, btnH = 50;
+        const soloX = W/2 - btnW - 20, soloY = H/2 - 10;
+        const onX = W/2 + 20, onY = H/2 - 10;
+        const skinBtnW = 200, skinBtnH = 44;
+        const skinX = W/2 - skinBtnW/2, skinY = H/2 + 55;
+        if(coords.x >= soloX && coords.x <= soloX+btnW && coords.y >= soloY && coords.y <= soloY+btnH) {
+            isOnline = false; gameState = 'classSelect';
+        } else if(coords.x >= onX && coords.x <= onX+btnW && coords.y >= onY && coords.y <= onY+btnH) {
+            gameState = 'lobby'; lobbyMode = '';
+            connectToServer();
+        } else if(coords.x >= skinX && coords.x <= skinX+skinBtnW && coords.y >= skinY && coords.y <= skinY+skinBtnH) {
+            gameState = 'skinSelect'; skinSelectWeapon = 0;
+        }
     } else if(gameState === 'classSelect') {
         for(let i = 0; i < 4; i++) {
             const cx = 60 + i * 220, cy = 140, cw = 200, ch = 380;
@@ -1455,10 +1468,10 @@ canvas.addEventListener('touchend', () => { if(!isMobile) shooting = false; });
 
 // contextmenu는 document 레벨에서 차단, 우클릭은 mousedown에서 처리
 
-// Fallback: document-level click for environments where canvas events don't fire
+// Fallback: document-level click - PC 전용 (모바일은 터치로 버튼 처리)
 document.addEventListener('click', e => {
-    if(gameState === 'title') {
-        gameState = 'classSelect';
+    if(gameState === 'title' && !isMobile) {
+        // PC에서는 canvas mousedown에서 이미 처리하므로 여기서는 무시
     }
 });
 
@@ -4698,10 +4711,7 @@ if(isMobile){
     },{passive:false});
   });
 
-  // === 타이틀/클래스 선택 터치 ===
-  canvas.addEventListener('touchstart',e=>{
-    if(gameState==='title'){gameState='classSelect';}
-  });
+  // === 타이틀/클래스 선택 터치 (버튼 인식은 메인 touchstart에서 처리) ===
 
   // === 터치 스크롤 방지 ===
   document.addEventListener('touchmove',e=>{
