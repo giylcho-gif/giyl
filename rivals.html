@@ -1361,12 +1361,46 @@ function handleMouseDown(e) {
         const crX = W/2 - btnW/2, crY = 160, jrY = 260;
         const backW = 160, backH = 40;
         const backX = W/2 - backW/2, backY = H - 60;
-        if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= crY && coords.y <= crY+btnH) {
-            connectToServer(() => { sendMsg({ type: 'create_room' }); });
-        } else if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= jrY && coords.y <= jrY+btnH) {
-            lobbyMode = 'join'; roomCodeInput = '';
-        } else if(coords.x >= backX && coords.x <= backX+backW && coords.y >= backY && coords.y <= backY+backH) {
-            gameState = 'title'; isOnline = false; lobbyMode = '';
+        if(lobbyMode === 'join') {
+            // 터치 키패드 히트 테스트
+            const keys1 = ['1','2','3','4','5','6','7','8','9','0'];
+            const keys2 = ['A','B','C','D','E','F','G','H','I','J'];
+            const keys3 = ['K','L','M','N','O','⌫','참가','취소'];
+            const allRows = [keys1, keys2, keys3];
+            const kw = 34, kh = 34, kgap = 3;
+            let keyHit = false;
+            allRows.forEach((row, ri) => {
+                const totalW = row.length * (kw + kgap) - kgap;
+                const startX = W/2 - totalW/2;
+                const ky = 430 + ri * (kh + kgap);
+                row.forEach((key, ki) => {
+                    const kx = startX + ki * (kw + kgap);
+                    let bw = kw;
+                    if(key === '참가' || key === '취소') bw = 52;
+                    if(key === '⌫') bw = 34;
+                    if(coords.x >= kx && coords.x <= kx+bw && coords.y >= ky && coords.y <= ky+kh) {
+                        keyHit = true;
+                        if(key === '⌫') { roomCodeInput = roomCodeInput.slice(0,-1); }
+                        else if(key === '참가') { if(roomCodeInput.length === 4) sendMsg({type:'join_room', code:roomCodeInput}); }
+                        else if(key === '취소') { lobbyMode = ''; roomCodeInput = ''; }
+                        else if(roomCodeInput.length < 4) { roomCodeInput += key; }
+                    }
+                });
+            });
+            if(!keyHit && coords.y < 340) {
+                // 키패드 밖 상단 클릭은 기존 버튼 체크
+                if(coords.x >= backX && coords.x <= backX+backW && coords.y >= backY && coords.y <= backY+backH) {
+                    gameState = 'title'; isOnline = false; lobbyMode = '';
+                }
+            }
+        } else {
+            if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= crY && coords.y <= crY+btnH) {
+                connectToServer(() => { sendMsg({ type: 'create_room' }); });
+            } else if(coords.x >= crX && coords.x <= crX+btnW && coords.y >= jrY && coords.y <= jrY+btnH) {
+                lobbyMode = 'join'; roomCodeInput = '';
+            } else if(coords.x >= backX && coords.x <= backX+backW && coords.y >= backY && coords.y <= backY+backH) {
+                gameState = 'title'; isOnline = false; lobbyMode = '';
+            }
         }
     } else if(gameState === 'classSelect') {
         for(let i = 0; i < 4; i++) {
@@ -3746,24 +3780,56 @@ function drawLobby() {
 
     // Join code input area (shown when lobbyMode is 'join')
     if(lobbyMode === 'join') {
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(W/2-180, 370, 360, 130);
+        const padBg = W/2 - 200;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(padBg, 340, 400, 280);
         ctx.strokeStyle = '#ffaa44';
-        ctx.strokeRect(W/2-180, 370, 360, 130);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(padBg, 340, 400, 280);
 
-        ctx.font = '18px Segoe UI';
+        ctx.font = '16px Segoe UI';
         ctx.fillStyle = '#aaa';
-        ctx.fillText('방 코드 4자리를 입력하세요', W/2, 400);
+        ctx.fillText('방 코드 4자리를 입력하세요', W/2, 370);
 
         // Code display
-        ctx.font = 'bold 48px Courier New';
+        ctx.font = 'bold 44px Courier New';
         ctx.fillStyle = '#fff';
         const displayCode = roomCodeInput + '_'.repeat(4 - roomCodeInput.length);
-        ctx.fillText(displayCode, W/2, 455);
+        ctx.fillText(displayCode, W/2, 415);
 
-        ctx.font = '14px Segoe UI';
-        ctx.fillStyle = '#888';
-        ctx.fillText('Enter로 참가 | Esc로 취소', W/2, 490);
+        // 터치 키패드: 0-9, A-Z (3줄)
+        const keys1 = ['1','2','3','4','5','6','7','8','9','0'];
+        const keys2 = ['A','B','C','D','E','F','G','H','I','J'];
+        const keys3 = ['K','L','M','N','O','⌫','참가','취소'];
+        const allRows = [keys1, keys2, keys3];
+        const kw = 34, kh = 34, kgap = 3;
+
+        allRows.forEach((row, ri) => {
+            const totalW = row.length * (kw + kgap) - kgap;
+            const startX = W/2 - totalW/2;
+            const ky = 430 + ri * (kh + kgap);
+            row.forEach((key, ki) => {
+                const kx = startX + ki * (kw + kgap);
+                let bw = kw;
+                if(key === '참가' || key === '취소') bw = 52;
+                if(key === '⌫') bw = 34;
+                // 참가/취소는 넓게
+                const actualX = (key === '참가' || key === '취소' || key === '⌫') ?
+                    startX + ki * (kw + kgap) : kx;
+                const isHover = canvasMouseX >= actualX && canvasMouseX <= actualX+bw && canvasMouseY >= ky && canvasMouseY <= ky+kh;
+                ctx.fillStyle = key === '참가' ? (isHover ? 'rgba(100,255,150,0.5)' : 'rgba(100,255,150,0.2)') :
+                                key === '취소' ? (isHover ? 'rgba(255,100,100,0.5)' : 'rgba(255,100,100,0.2)') :
+                                key === '⌫' ? (isHover ? 'rgba(255,200,50,0.5)' : 'rgba(255,200,50,0.2)') :
+                                (isHover ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)');
+                ctx.fillRect(actualX, ky, bw, kh);
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(actualX, ky, bw, kh);
+                ctx.font = key.length > 1 ? 'bold 11px Segoe UI' : 'bold 15px Segoe UI';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(key, actualX + bw/2, ky + kh/2 + (key.length > 1 ? 4 : 5));
+            });
+        });
     }
 
     // Back button (터치 가능한 버튼으로)
