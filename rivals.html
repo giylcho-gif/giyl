@@ -127,7 +127,13 @@ _dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-const W = 960, H = 640;
+// 모바일: 화면 비율에 맞춰 W 조정 (짜부 방지)
+const _earlyMobile = (('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 1024);
+let W = 960, H = 640;
+if(_earlyMobile) {
+    const screenAspect = Math.max(window.innerWidth, window.innerHeight) / Math.min(window.innerWidth, window.innerHeight);
+    W = Math.round(H * screenAspect);
+}
 canvas.width = W; canvas.height = H;
 
 // ====== THREE.JS 3D 무기 시스템 ======
