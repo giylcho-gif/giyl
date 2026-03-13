@@ -71,7 +71,7 @@ canvas{display:block;width:100vw;height:100vh}
 </div>
 <script>
 // ===== Constants =====
-const GRAVITY = 28, JUMP_VEL = 11, MOVE_SPEED = 7.5, EYE_HEIGHT = 1.6;
+const GRAVITY = 25, JUMP_VEL = 12.5, MOVE_SPEED = 8, EYE_HEIGHT = 1.6;
 const PLAYER_RADIUS = 0.3, COYOTE_TIME = 0.1, JUMP_BUFFER = 0.1;
 const SECTION_HEIGHT = 10, NUM_SECTIONS = 8, TOTAL_HEIGHT = SECTION_HEIGHT * NUM_SECTIONS + 2;
 const NEON = [0xff1493,0x39ff14,0x00bfff,0xff6600,0xbf00ff,0x00ffff,0xffff00,0xff3344];
@@ -151,18 +151,20 @@ function addDecorEdge(p, color){
 // ===== Section Generators (Tower of Hell style - big, connected obstacles) =====
 const TH = .5; // platform thickness
 
-// 1. 대형 지그재그 브릿지
+// 1. 대형 지그재그 브릿지 (높이차 최대 1.5)
 function zigzagBridge(yBase){
   const o=[];
   const w=4.5, d=2.5;
-  o.push({x:-5,y:yBase+1.8,z:0, w,h:TH,d});
-  o.push({x:-2,y:yBase+1.8,z:0, w:1.2,h:TH,d:5});       // 연결 통로
-  o.push({x:0,y:yBase+3.5,z:3, w:5,h:TH,d});
-  o.push({x:3,y:yBase+3.5,z:1, w:d,h:TH,d:4});            // 연결
-  o.push({x:5,y:yBase+5.5,z:-1, w,h:TH,d});
-  o.push({x:2,y:yBase+5.5,z:-1, w:1.2,h:TH,d:4});
-  o.push({x:-1,y:yBase+7.5,z:-4, w:5,h:TH,d});
-  o.push({x:-1,y:yBase+7.5,z:-1.5, w:1.5,h:TH,d:3});     // 출구 연결
+  o.push({x:-5,y:yBase+1.5,z:0, w,h:TH,d});
+  o.push({x:-2,y:yBase+1.5,z:0, w:1.2,h:TH,d:5});       // 연결 통로
+  o.push({x:1,y:yBase+3,z:3, w:5,h:TH,d});
+  o.push({x:4,y:yBase+3,z:1, w:d,h:TH,d:4});             // 연결
+  o.push({x:5,y:yBase+4.5,z:-1, w,h:TH,d});
+  o.push({x:2,y:yBase+4.5,z:-1, w:1.2,h:TH,d:4});
+  o.push({x:-2,y:yBase+6,z:-4, w:5,h:TH,d});
+  o.push({x:-2,y:yBase+6,z:-1.5, w:1.5,h:TH,d:3});
+  o.push({x:-4,y:yBase+7.5,z:1, w:4,h:TH,d:2.5});       // 추가 단계
+  o.push({x:0,y:yBase+9,z:0, w:4,h:TH,d:3});             // 출구 직전
   return o;
 }
 
