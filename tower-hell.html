@@ -305,6 +305,14 @@ function resetPlayer(){
   highestY=1;
 }
 
+// AABB overlap test: player capsule vs platform box
+function playerOverlaps(px,py,pz,p){
+  const hw=p.w/2, hd=p.d/2, hh=p.h/2, pr=PLAYER_RADIUS;
+  return px+pr>p.x-hw && px-pr<p.x+hw &&
+         pz+pr>p.z-hd && pz-pr<p.z+hd &&
+         py<p.y+hh && py+EYE_HEIGHT>p.y-hh;
+}
+
 function updatePlayer(dt){
   if(gameState!=='playing') return;
 
@@ -327,15 +335,31 @@ function updatePlayer(dt){
   }
 
   const len = Math.sqrt(mx*mx+mz*mz);
-  if(len>.01){
-    player.x += (mx/len)*MOVE_SPEED*dt;
-    player.z += (mz/len)*MOVE_SPEED*dt;
+  let dx=0,dz=0;
+  if(len>.01){dx=(mx/len)*MOVE_SPEED*dt;dz=(mz/len)*MOVE_SPEED*dt;}
+
+  // ── Step 1: X movement + wall collision ──
+  player.x += dx;
+  for(const p of allPlatforms){
+    if(playerOverlaps(player.x,player.y,player.z,p)){
+      if(dx>0) player.x = p.x - p.w/2 - PLAYER_RADIUS;
+      else     player.x = p.x + p.w/2 + PLAYER_RADIUS;
+    }
   }
 
-  // Gravity
-  player.prevY = player.y;
+  // ── Step 2: Z movement + wall collision ──
+  player.z += dz;
+  for(const p of allPlatforms){
+    if(playerOverlaps(player.x,player.y,player.z,p)){
+      if(dz>0) player.z = p.z - p.d/2 - PLAYER_RADIUS;
+      else     player.z = p.z + p.d/2 + PLAYER_RADIUS;
+    }
+  }
+
+  // ── Step 3: Gravity + vertical collision (sweep) ──
+  const prevY = player.y;
   player.vy -= GRAVITY*dt;
-  if(player.vy < -40) player.vy = -40; // terminal velocity
+  if(player.vy<-40) player.vy=-40;
   player.y += player.vy*dt;
 
   // Coyote time
@@ -343,12 +367,12 @@ function updatePlayer(dt){
   else player.coyoteTimer -= dt;
 
   // Jump buffer
-  if(player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
+  if(player.jumpBufferTimer>0) player.jumpBufferTimer -= dt;
 
   // Jump
   const wantJump = keys['Space'] || mobileJump;
   if(wantJump) player.jumpBufferTimer = JUMP_BUFFER;
-  if(player.jumpBufferTimer > 0 && player.coyoteTimer > 0){
+  if(player.jumpBufferTimer>0 && player.coyoteTimer>0){
     player.vy = JUMP_VEL;
     player.onGround = false;
     player.coyoteTimer = 0;
@@ -357,25 +381,26 @@ function updatePlayer(dt){
   }
   mobileJump = false;
 
-  // Platform collision
+  // Vertical collision: sweep from prevY to player.y
   let landed = false;
+  let bestTop = -Infinity;
   for(const p of allPlatforms){
-    const hw = p.w/2+PLAYER_RADIUS, hd = p.d/2+PLAYER_RADIUS;
-    const top = p.y+p.h/2;
+    const hw=p.w/2+PLAYER_RADIUS, hd=p.d/2+PLAYER_RADIUS;
     if(player.x<p.x-hw||player.x>p.x+hw) continue;
     if(player.z<p.z-hd||player.z>p.z+hd) continue;
-    // Landing check
-    if(player.vy<=0 && player.prevY>=top-.05 && player.y<=top+.3){
-      player.y = top;
-      player.vy = 0;
-      landed = true;
+    const top = p.y+p.h/2;
+    const bot = p.y-p.h/2;
+    // Landing: feet swept through platform top surface
+    if(player.vy<=0 && prevY>=top-0.02 && player.y<top+0.01){
+      if(top>bestTop){bestTop=top;landed=true;}
     }
-    // Head bump
-    const bot = p.y - p.h/2;
-    if(player.vy>0 && player.prevY+EYE_HEIGHT<=bot+.1 && player.y+EYE_HEIGHT>=bot){
+    // Head bump: head swept through platform bottom surface
+    if(player.vy>0 && prevY+EYE_HEIGHT<=bot+0.02 && player.y+EYE_HEIGHT>bot-0.01){
+      player.y = bot - EYE_HEIGHT - 0.01;
       player.vy = 0;
     }
   }
+  if(landed){player.y=bestTop;player.vy=0;}
   player.onGround = landed;
 
   // Track highest
