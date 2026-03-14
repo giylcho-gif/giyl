@@ -38,11 +38,11 @@ canvas{display:block;width:100vw;height:100vh}
 @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.75}}
 @media(min-width:1025px){#mobileControls{display:none!important}}
 #mobileControls{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:20;pointer-events:none}
-#m-joy{position:absolute;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.12);left:16px;bottom:16px;pointer-events:auto;touch-action:none}
-#m-joy-knob{position:absolute;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.15);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-#m-jump{position:absolute;width:64px;height:64px;border-radius:50%;right:24px;bottom:24px;background:rgba(80,140,255,.25);border:3px solid rgba(80,140,255,.4);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);font-size:18px;font-weight:bold}
-#m-jump:active{background:rgba(80,140,255,.6);color:#fff}
-#m-look{position:absolute;top:0;right:0;width:55%;height:70%;pointer-events:auto;touch-action:none}
+#m-joy{position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.15);left:20px;bottom:30px;pointer-events:auto;touch-action:none}
+#m-joy-knob{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.25);border:3px solid rgba(255,255,255,.2);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 10px rgba(255,255,255,.1)}
+#m-jump{position:absolute;width:76px;height:76px;border-radius:50%;right:20px;bottom:30px;background:rgba(80,160,255,.3);border:3px solid rgba(80,160,255,.5);pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.8);font-size:20px;font-weight:bold;box-shadow:0 0 15px rgba(80,140,255,.2)}
+#m-jump:active{background:rgba(80,160,255,.7);color:#fff}
+#m-look{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:auto;touch-action:none;z-index:-1}
 </style>
 </head>
 <body>
@@ -129,6 +129,7 @@ scene.add(pLight);
 
 // ===== Platform System =====
 let allPlatforms = [];
+let dynamicPlatforms = []; // platforms with motion (rotate/slide/spin)
 let sectionColors = [];
 
 function addPlatform(p, color){
@@ -148,119 +149,204 @@ function addDecorEdge(p, color){
   scene.add(edge);
 }
 
+// Dynamic platform: moves/rotates each frame
+// motion: {type:'slide',axis:'x',center,range,speed} | {type:'rotate',cx,cz,radius,speed,startAngle} | {type:'spin',speed}
+function addDynamicPlatform(p, color, motion){
+  const geo = new THREE.BoxGeometry(p.w,p.h,p.d);
+  const mat = new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.4,metalness:.4,roughness:.4});
+  const mesh = new THREE.Mesh(geo,mat);
+  mesh.position.set(p.x,p.y,p.z);
+  scene.add(mesh);
+  const entry = {...p,mesh};
+  allPlatforms.push(entry);
+  dynamicPlatforms.push({entry,motion,origX:p.x,origY:p.y,origZ:p.z});
+  // glow edge
+  const edgeGeo = new THREE.EdgesGeometry(geo);
+  const edgeMat = new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.5});
+  const edge = new THREE.LineSegments(edgeGeo,edgeMat);
+  mesh.add(edge);
+}
+
+function updateDynamicPlatforms(now){
+  const t = now * 0.001;
+  for(const dp of dynamicPlatforms){
+    const m = dp.motion, e = dp.entry;
+    if(m.type==='slide'){
+      const offset = Math.sin(t * m.speed) * m.range;
+      if(m.axis==='x'){ e.x = dp.origX + offset; }
+      else if(m.axis==='z'){ e.z = dp.origZ + offset; }
+      else if(m.axis==='y'){ e.y = dp.origY + offset; }
+      e.mesh.position.set(e.x, e.y, e.z);
+    }
+    else if(m.type==='rotate'){
+      const a = m.startAngle + t * m.speed;
+      e.x = m.cx + Math.cos(a) * m.radius;
+      e.z = m.cz + Math.sin(a) * m.radius;
+      e.mesh.position.set(e.x, e.y, e.z);
+      e.mesh.rotation.y = a;
+    }
+    else if(m.type==='spin'){
+      e.mesh.rotation.y = t * m.speed;
+    }
+  }
+}
+
 // ===== Section Generators (Tower of Hell style - big, connected obstacles) =====
 const TH = .5; // platform thickness
 
-// 1. 대형 지그재그 브릿지 (높이차 최대 1.5)
-function zigzagBridge(yBase){
-  const o=[];
-  const w=4.5, d=2.5;
+// diff: 0~1 difficulty scaling (0=easy, 1=hard)
+// Returns {statics:[], dynamics:[]} where dynamics have motion info
+function sc(w,diff){ return Math.max(w*0.5, w*(1-diff*0.35)); } // shrink platforms with difficulty
+
+// 1. 지그재그 브릿지
+function zigzagBridge(yBase,diff){
+  const o=[],dyn=[];
+  const w=sc(4.5,diff), d=sc(2.5,diff);
   o.push({x:-5,y:yBase+1.5,z:0, w,h:TH,d});
-  o.push({x:-2,y:yBase+1.5,z:0, w:1.2,h:TH,d:5});       // 연결 통로
-  o.push({x:1,y:yBase+3,z:3, w:5,h:TH,d});
-  o.push({x:4,y:yBase+3,z:1, w:d,h:TH,d:4});             // 연결
+  o.push({x:-2,y:yBase+1.5,z:0, w:sc(1.2,diff),h:TH,d:5});
+  o.push({x:1,y:yBase+3,z:3, w:sc(5,diff),h:TH,d});
+  o.push({x:4,y:yBase+3,z:1, w:d,h:TH,d:4});
   o.push({x:5,y:yBase+4.5,z:-1, w,h:TH,d});
-  o.push({x:2,y:yBase+4.5,z:-1, w:1.2,h:TH,d:4});
-  o.push({x:-2,y:yBase+6,z:-4, w:5,h:TH,d});
-  o.push({x:-2,y:yBase+6,z:-1.5, w:1.5,h:TH,d:3});
-  o.push({x:-4,y:yBase+7.5,z:1, w:4,h:TH,d:2.5});       // 추가 단계
-  o.push({x:0,y:yBase+9,z:0, w:4,h:TH,d:3});             // 출구 직전
-  return o;
+  o.push({x:2,y:yBase+4.5,z:-1, w:sc(1.2,diff),h:TH,d:4});
+  o.push({x:-2,y:yBase+6,z:-4, w:sc(5,diff),h:TH,d});
+  o.push({x:-2,y:yBase+6,z:-1.5, w:sc(1.5,diff),h:TH,d:3});
+  o.push({x:-4,y:yBase+7.5,z:1, w:sc(4,diff),h:TH,d:sc(2.5,diff)});
+  o.push({x:0,y:yBase+9,z:0, w:sc(4,diff),h:TH,d:sc(3,diff)});
+  // 고난이도: 이동 플랫폼 추가
+  if(diff>0.3) dyn.push({p:{x:2,y:yBase+5.5,z:-3,w:2.5,h:TH,d:2}, motion:{type:'slide',axis:'x',range:2.5,speed:1.5+diff}});
+  return {statics:o,dynamics:dyn};
 }
 
-// 2. 나선형 계단 (넓은 판)
-function spiralWalkway(yBase){
-  const o=[], n=10, R=5.5;
+// 2. 나선형 계단
+function spiralWalkway(yBase,diff){
+  const o=[],dyn=[], n=10, R=5.5;
   for(let i=0;i<n;i++){
     const a=(i/n)*Math.PI*2.5;
-    const pw=Math.max(2.5, 3.5-i*.1), pd=Math.max(2, 2.8-i*.08);
-    o.push({x:Math.cos(a)*R, y:yBase+.8+i*(SECTION_HEIGHT-1.5)/n, z:Math.sin(a)*R, w:pw,h:TH,d:pd});
+    const pw=sc(Math.max(2.5,3.5-i*.1),diff), pd=sc(Math.max(2,2.8-i*.08),diff);
+    o.push({x:Math.cos(a)*R,y:yBase+.8+i*(SECTION_HEIGHT-1.5)/n,z:Math.sin(a)*R, w:pw,h:TH,d:pd});
   }
-  return o;
+  // 고난이도: 회전 플랫폼 (회오리)
+  if(diff>0.4){
+    const ry=yBase+5;
+    dyn.push({p:{x:0,y:ry,z:R,w:2.5,h:TH,d:1.5}, motion:{type:'rotate',cx:0,cz:0,radius:R,speed:0.8+diff*0.8,startAngle:0}});
+    dyn.push({p:{x:0,y:ry,z:-R,w:2.5,h:TH,d:1.5}, motion:{type:'rotate',cx:0,cz:0,radius:R,speed:0.8+diff*0.8,startAngle:Math.PI}});
+  }
+  return {statics:o,dynamics:dyn};
 }
 
 // 3. L자 통로 + 점프
-function corridorJump(yBase){
-  const o=[];
-  // 긴 통로 → 점프 → 긴 통로 → 점프 반복
-  o.push({x:-5,y:yBase+1.5,z:0, w:1.5,h:TH,d:8});         // 좌측 세로 통로
-  o.push({x:-2,y:yBase+3,z:4, w:5,h:TH,d:1.5});            // 가로 브릿지 상단
-  o.push({x:3,y:yBase+4.5,z:4, w:3,h:TH,d:3});             // 중간 착지
-  o.push({x:5,y:yBase+5.5,z:1, w:1.5,h:TH,d:7});           // 우측 세로 통로
-  o.push({x:2,y:yBase+7,z:-3, w:5,h:TH,d:1.5});            // 가로 브릿지 하단
-  o.push({x:-2,y:yBase+8.5,z:-3, w:3,h:TH,d:3});           // 출구쪽 착지
-  return o;
+function corridorJump(yBase,diff){
+  const o=[],dyn=[];
+  o.push({x:-5,y:yBase+1.5,z:0, w:sc(1.5,diff),h:TH,d:8});
+  o.push({x:-2,y:yBase+3,z:4, w:sc(5,diff),h:TH,d:sc(1.5,diff)});
+  o.push({x:3,y:yBase+4.5,z:4, w:sc(3,diff),h:TH,d:sc(3,diff)});
+  o.push({x:5,y:yBase+5.5,z:1, w:sc(1.5,diff),h:TH,d:7});
+  o.push({x:2,y:yBase+7,z:-3, w:sc(5,diff),h:TH,d:sc(1.5,diff)});
+  o.push({x:-2,y:yBase+8.5,z:-3, w:sc(3,diff),h:TH,d:sc(3,diff)});
+  if(diff>0.3) dyn.push({p:{x:1,y:yBase+3.8,z:0,w:2.5,h:TH,d:1.5}, motion:{type:'slide',axis:'z',range:3,speed:1.2+diff}});
+  return {statics:o,dynamics:dyn};
 }
 
-// 4. 벽 타기 경로 (외곽 따라 올라가기)
-function wallPath(yBase){
-  const o=[], R=6;
-  const pts=[
-    {a:0,dy:1.2},{a:.7,dy:2.4},{a:1.4,dy:3.6},{a:2.1,dy:4.8},
-    {a:2.8,dy:6},{a:3.5,dy:7.2},{a:4.2,dy:8.4}
-  ];
-  pts.forEach(p=>{
-    const tang = p.a+Math.PI/2;
-    o.push({x:Math.cos(p.a)*R, y:yBase+p.dy, z:Math.sin(p.a)*R,
-      w:2.8,h:TH,d:1.8});
+// 4. 벽 타기 경로
+function wallPath(yBase,diff){
+  const o=[],dyn=[], R=6;
+  const pts=[{a:0,dy:1.2},{a:.7,dy:2.4},{a:1.4,dy:3.6},{a:2.1,dy:4.8},{a:2.8,dy:6},{a:3.5,dy:7.2},{a:4.2,dy:8.4}];
+  pts.forEach((p,i)=>{
+    o.push({x:Math.cos(p.a)*R, y:yBase+p.dy, z:Math.sin(p.a)*R, w:sc(2.8,diff),h:TH,d:sc(1.8,diff)});
   });
-  return o;
+  if(diff>0.5) dyn.push({p:{x:0,y:yBase+4.8,z:0,w:3,h:TH,d:1.5}, motion:{type:'rotate',cx:0,cz:0,radius:3,speed:1+diff,startAngle:1}});
+  return {statics:o,dynamics:dyn};
 }
 
-// 5. 십자가 브릿지 + 점프대
-function crossBridge(yBase){
-  const o=[];
-  o.push({x:0,y:yBase+1.5,z:0, w:10,h:TH,d:1.5});         // 가로 대형 브릿지
-  o.push({x:4,y:yBase+3,z:0, w:2.5,h:TH,d:2.5});           // 우측 점프대
-  o.push({x:4,y:yBase+4.5,z:3, w:2.5,h:TH,d:5});           // 우측 세로 통로
-  o.push({x:0,y:yBase+6,z:5, w:8,h:TH,d:1.5});             // 상단 가로 브릿지
-  o.push({x:-4,y:yBase+7.5,z:3, w:2.5,h:TH,d:5});          // 좌측 세로 통로
-  o.push({x:-2,y:yBase+9,z:0, w:4,h:TH,d:2.5});            // 출구 착지대
-  return o;
+// 5. 십자가 브릿지
+function crossBridge(yBase,diff){
+  const o=[],dyn=[];
+  o.push({x:0,y:yBase+1.5,z:0, w:sc(10,diff),h:TH,d:sc(1.5,diff)});
+  o.push({x:4,y:yBase+3,z:0, w:sc(2.5,diff),h:TH,d:sc(2.5,diff)});
+  o.push({x:4,y:yBase+4.5,z:3, w:sc(2.5,diff),h:TH,d:5});
+  o.push({x:0,y:yBase+6,z:5, w:sc(8,diff),h:TH,d:sc(1.5,diff)});
+  o.push({x:-4,y:yBase+7.5,z:3, w:sc(2.5,diff),h:TH,d:5});
+  o.push({x:-2,y:yBase+9,z:0, w:sc(4,diff),h:TH,d:sc(2.5,diff)});
+  if(diff>0.2) dyn.push({p:{x:0,y:yBase+4.5,z:0,w:2,h:TH,d:2}, motion:{type:'slide',axis:'x',range:3,speed:1.5+diff*1.5}});
+  return {statics:o,dynamics:dyn};
 }
 
 // 6. 나선형 점프 타워
-function helixTower(yBase){
-  const o=[], n=8, R=4.5;
+function helixTower(yBase,diff){
+  const o=[],dyn=[], n=8, R=4.5;
   for(let i=0;i<n;i++){
     const a=(i/n)*Math.PI*2.8;
     o.push({x:Math.cos(a)*R, y:yBase+1+i*(SECTION_HEIGHT-1.5)/n, z:Math.sin(a)*R,
-      w:2.2,h:TH,d:2.2});
+      w:sc(2.2,diff),h:TH,d:sc(2.2,diff)});
   }
-  return o;
+  if(diff>0.4){
+    dyn.push({p:{x:0,y:yBase+4,z:0,w:2,h:TH,d:2}, motion:{type:'rotate',cx:0,cz:0,radius:R*0.6,speed:1.2+diff,startAngle:0}});
+  }
+  return {statics:o,dynamics:dyn};
 }
 
 // 7. 계단식 스캐폴드
-function scaffold(yBase){
-  const o=[];
-  o.push({x:-4,y:yBase+1,z:-2, w:4,h:TH,d:3});
-  o.push({x:-4,y:yBase+2.5,z:2, w:4,h:TH,d:3});
-  o.push({x:0,y:yBase+4,z:4, w:3,h:TH,d:3});
-  o.push({x:4,y:yBase+5.5,z:2, w:4,h:TH,d:3});
-  o.push({x:4,y:yBase+7,z:-2, w:4,h:TH,d:3});
-  o.push({x:0,y:yBase+8.5,z:-3, w:3,h:TH,d:3});
-  return o;
+function scaffold(yBase,diff){
+  const o=[],dyn=[];
+  o.push({x:-4,y:yBase+1,z:-2, w:sc(4,diff),h:TH,d:sc(3,diff)});
+  o.push({x:-4,y:yBase+2.5,z:2, w:sc(4,diff),h:TH,d:sc(3,diff)});
+  o.push({x:0,y:yBase+4,z:4, w:sc(3,diff),h:TH,d:sc(3,diff)});
+  o.push({x:4,y:yBase+5.5,z:2, w:sc(4,diff),h:TH,d:sc(3,diff)});
+  o.push({x:4,y:yBase+7,z:-2, w:sc(4,diff),h:TH,d:sc(3,diff)});
+  o.push({x:0,y:yBase+8.5,z:-3, w:sc(3,diff),h:TH,d:sc(3,diff)});
+  if(diff>0.3) dyn.push({p:{x:0,y:yBase+5.5,z:0,w:2.5,h:TH,d:2}, motion:{type:'slide',axis:'z',range:2.5,speed:1.3+diff}});
+  return {statics:o,dynamics:dyn};
 }
 
 // 8. 좁은 빔 미로
-function beamMaze(yBase){
-  const o=[], bw=1;
+function beamMaze(yBase,diff){
+  const o=[],dyn=[], bw=Math.max(0.7, 1-diff*0.3);
   o.push({x:-4,y:yBase+1.5,z:0, w:bw,h:TH,d:8});
   o.push({x:-1,y:yBase+3,z:4, w:6,h:TH,d:bw});
   o.push({x:4,y:yBase+4.5,z:1, w:bw,h:TH,d:7});
   o.push({x:1,y:yBase+6,z:-3, w:7,h:TH,d:bw});
   o.push({x:-3,y:yBase+7.5,z:-1, w:bw,h:TH,d:5});
   o.push({x:0,y:yBase+9,z:1, w:4,h:TH,d:bw});
-  return o;
+  if(diff>0.5) dyn.push({p:{x:0,y:yBase+4.5,z:-1,w:1.5,h:TH,d:1.5}, motion:{type:'rotate',cx:0,cz:0,radius:2.5,speed:1.5+diff,startAngle:0}});
+  return {statics:o,dynamics:dyn};
 }
 
-const SECTION_TYPES = [zigzagBridge,spiralWalkway,corridorJump,wallPath,crossBridge,helixTower,scaffold,beamMaze];
+// 9. 회오리 점프 (토네이도) - 중앙에서 회전하는 플랫폼들
+function tornadoJump(yBase,diff){
+  const o=[],dyn=[];
+  o.push({x:-4,y:yBase+1,z:0, w:3,h:TH,d:3}); // 시작 착지
+  // 회전하는 팔 여러 개 (회오리)
+  const arms=4+Math.floor(diff*2);
+  for(let i=0;i<arms;i++){
+    const h=yBase+2+i*1.5;
+    const spd=(0.7+diff*0.6)*(i%2===0?1:-1); // 번갈아 반대 방향
+    dyn.push({p:{x:3,y:h,z:0,w:3,h:TH,d:1.8}, motion:{type:'rotate',cx:0,cz:0,radius:3,speed:spd,startAngle:i*Math.PI/arms*2}});
+  }
+  o.push({x:3,y:yBase+9,z:0, w:3,h:TH,d:3}); // 출구 착지
+  return {statics:o,dynamics:dyn};
+}
+
+// 10. 이동 브릿지 - 좌우/전후로 움직이는 다리들
+function movingBridges(yBase,diff){
+  const o=[],dyn=[];
+  o.push({x:-5,y:yBase+1,z:0, w:3,h:TH,d:3}); // 시작
+  dyn.push({p:{x:-2,y:yBase+2.5,z:0,w:3,h:TH,d:2}, motion:{type:'slide',axis:'z',range:3,speed:1.2+diff}});
+  dyn.push({p:{x:2,y:yBase+4,z:0,w:2.5,h:TH,d:2}, motion:{type:'slide',axis:'x',range:2.5,speed:1.5+diff}});
+  o.push({x:5,y:yBase+5,z:0, w:2.5,h:TH,d:2.5}); // 중간 쉼터
+  dyn.push({p:{x:2,y:yBase+6.5,z:2,w:2.5,h:TH,d:2}, motion:{type:'slide',axis:'z',range:3,speed:1.3+diff*0.8}});
+  dyn.push({p:{x:-2,y:yBase+8,z:0,w:2.5,h:TH,d:2}, motion:{type:'slide',axis:'x',range:3,speed:1.4+diff*0.8}});
+  o.push({x:0,y:yBase+9.2,z:0, w:3,h:TH,d:3}); // 출구
+  return {statics:o,dynamics:dyn};
+}
+
+const SECTION_TYPES = [zigzagBridge,spiralWalkway,tornadoJump,corridorJump,wallPath,movingBridges,crossBridge,helixTower,scaffold,beamMaze];
 
 // ===== Generate Tower =====
 function generateTower(){
   // Clear
   for(const p of allPlatforms) scene.remove(p.mesh);
   allPlatforms = [];
+  dynamicPlatforms = [];
   sectionColors = [];
   const toRemove = [];
   scene.traverse(c=>{if(c.isLineSegments || c.userData.tower) toRemove.push(c);});
@@ -307,10 +393,12 @@ function generateTower(){
     const entryP={x:0,y:yBase,z:0,w:4.5,h:.5,d:4.5};
     addPlatform(entryP,color); addDecorEdge(entryP,color);
 
-    // Section platforms
+    // Section platforms (난이도: 섹션이 올라갈수록 어려워짐)
+    const diff = s / (NUM_SECTIONS - 1); // 0 ~ 1
     const gen = SECTION_TYPES[s % SECTION_TYPES.length];
-    const platforms = gen(yBase);
-    for(const p of platforms){addPlatform(p,color);addDecorEdge(p,color);}
+    const result = gen(yBase, diff);
+    for(const p of result.statics){addPlatform(p,color);addDecorEdge(p,color);}
+    for(const d of result.dynamics){addDynamicPlatform(d.p,color,d.motion);}
 
     // Exit pad
     const exitP={x:0,y:yBase+SECTION_HEIGHT,z:0,w:4.5,h:.5,d:4.5};
@@ -607,7 +695,7 @@ if(isMobile){
         if(m>1){dx/=m;dy/=m;}
         mobileMove.x = dx;
         mobileMove.y = dy;
-        joyKnob.style.transform = `translate(calc(-50% + ${dx*25}px), calc(-50% + ${dy*25}px))`;
+        joyKnob.style.transform = `translate(calc(-50% + ${dx*35}px), calc(-50% + ${dy*35}px))`;
       }
     }
   },{passive:false});
@@ -637,8 +725,8 @@ if(isMobile){
       if(t.identifier===lookTouchId){
         const dx=t.clientX-lastLookX;
         const dy=t.clientY-lastLookY;
-        yaw -= dx*.004;
-        pitch -= dy*.004;
+        yaw -= dx*.006;
+        pitch -= dy*.005;
         pitch = Math.max(-Math.PI/2+.05,Math.min(Math.PI/2-.05,pitch));
         lastLookX=t.clientX;lastLookY=t.clientY;
       }
@@ -648,8 +736,9 @@ if(isMobile){
   lookEl.addEventListener('touchend',resetLook);
   lookEl.addEventListener('touchcancel',resetLook);
 
-  // Jump
+  // Jump (연타 가능하게)
   jumpEl.addEventListener('touchstart',e=>{e.preventDefault();mobileJump=true;},{passive:false});
+  jumpEl.addEventListener('touchend',e=>{e.preventDefault();},{passive:false});
 }
 
 // ===== Resize =====
@@ -668,6 +757,7 @@ function gameLoop(now){
 
   if(gameState==='playing'){
     timer += dt;
+    updateDynamicPlatforms(now);
     updatePlayer(dt);
     updateHUD();
   }
