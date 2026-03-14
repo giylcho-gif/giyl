@@ -80,6 +80,7 @@ const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && w
 // ===== State =====
 const player = {x:0,y:1,z:0,vy:0,prevY:1,onGround:true,coyoteTimer:0,jumpBufferTimer:0};
 let yaw = 0, pitch = 0, gameState = 'menu', timer = 0, attempts = 0, highestY = 0;
+let standingPlatform = null; // 서 있는 플랫폼 (이동 플랫폼 캐리용)
 let bestTime = localStorage.getItem('toh-best') ? parseFloat(localStorage.getItem('toh-best')) : null;
 const keys = {};
 
@@ -171,6 +172,8 @@ function updateDynamicPlatforms(now){
   const t = now * 0.001;
   for(const dp of dynamicPlatforms){
     const m = dp.motion, e = dp.entry;
+    // 이전 위치 저장 (플랫폼 캐리용)
+    dp.prevX = e.x; dp.prevY = e.y; dp.prevZ = e.z;
     if(m.type==='slide'){
       const offset = Math.sin(t * m.speed) * m.range;
       if(m.axis==='x'){ e.x = dp.origX + offset; }
@@ -188,6 +191,10 @@ function updateDynamicPlatforms(now){
     else if(m.type==='spin'){
       e.mesh.rotation.y = t * m.speed;
     }
+    // 이동 델타 계산
+    dp.deltaX = e.x - dp.prevX;
+    dp.deltaY = e.y - dp.prevY;
+    dp.deltaZ = e.z - dp.prevZ;
   }
 }
 
@@ -451,6 +458,18 @@ function playerOverlaps(px,py,pz,p){
 function updatePlayer(dt){
   if(gameState!=='playing') return;
 
+  // ── 이동 플랫폼 캐리: 서 있는 플랫폼이 움직이면 플레이어도 같이 이동 ──
+  if(standingPlatform){
+    for(const dp of dynamicPlatforms){
+      if(dp.entry === standingPlatform){
+        player.x += dp.deltaX;
+        player.y += dp.deltaY;
+        player.z += dp.deltaZ;
+        break;
+      }
+    }
+  }
+
   // Movement direction
   const fwd = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
   const rgt = new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
@@ -519,6 +538,7 @@ function updatePlayer(dt){
   // Vertical collision: sweep from prevY to player.y
   let landed = false;
   let bestTop = -Infinity;
+  let landedPlatform = null;
   for(const p of allPlatforms){
     const hw=p.w/2+PLAYER_RADIUS, hd=p.d/2+PLAYER_RADIUS;
     if(player.x<p.x-hw||player.x>p.x+hw) continue;
@@ -527,7 +547,7 @@ function updatePlayer(dt){
     const bot = p.y-p.h/2;
     // Landing: feet swept through platform top surface
     if(player.vy<=0 && prevY>=top-0.02 && player.y<top+0.01){
-      if(top>bestTop){bestTop=top;landed=true;}
+      if(top>bestTop){bestTop=top;landed=true;landedPlatform=p;}
     }
     // Head bump: head swept through platform bottom surface
     if(player.vy>0 && prevY+EYE_HEIGHT<=bot+0.02 && player.y+EYE_HEIGHT>bot-0.01){
@@ -537,6 +557,7 @@ function updatePlayer(dt){
   }
   if(landed){player.y=bestTop;player.vy=0;}
   player.onGround = landed;
+  standingPlatform = landed ? landedPlatform : null;
 
   // Track highest
   if(player.y > highestY) highestY = player.y;
