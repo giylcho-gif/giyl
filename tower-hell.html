@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>지옥의 탑</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a1a;overflow:hidden;font-family:'Segoe UI',sans-serif;touch-action:none;-webkit-user-select:none;user-select:none}
@@ -120,6 +121,119 @@ scene.background = new THREE.Color(0x080818);
 scene.fog = new THREE.Fog(0x080818,60,160);
 
 const camera = new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,.1,300);
+
+// ===== First-Person Arms (GLB 모델) =====
+let armsModel = null;
+let leftArmGroup = null, rightArmGroup = null; // 왼팔/오른팔 그룹 (개별 애니메이션용)
+let armsMixer = null;
+let armsActions = {};
+let armBobTimer = 0;
+let isMoving = false;
+
+scene.add(camera); // camera를 scene에 추가해야 children이 보임
+
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.load('models/fps_arms.glb', (gltf) => {
+  const loaded = gltf.scene;
+
+  // 모델의 바운딩박스로 중심점 계산
+  const box = new THREE.Box3().setFromObject(loaded);
+  const center = box.getCenter(new THREE.Vector3());
+
+  // 왼팔/오른팔 분리 (x 좌표 기준)
+  leftArmGroup = new THREE.Group();
+  rightArmGroup = new THREE.Group();
+
+  // 모든 메시를 x좌표 기준으로 왼쪽/오른쪽 분류
+  const meshesToSort = [];
+  loaded.traverse(child => {
+    if(child.isMesh){
+      child.castShadow = false;
+      child.receiveShadow = false;
+      child.frustumCulled = false;
+      meshesToSort.push(child);
+    }
+  });
+
+  meshesToSort.forEach(mesh => {
+    const meshBox = new THREE.Box3().setFromObject(mesh);
+    const meshCenter = meshBox.getCenter(new THREE.Vector3());
+    const clone = mesh.clone();
+    // 월드 포지션 유지
+    mesh.getWorldPosition(clone.position);
+    mesh.getWorldQuaternion(clone.quaternion);
+    mesh.getWorldScale(clone.scale);
+    if(meshCenter.x < center.x){
+      leftArmGroup.add(clone);
+    } else {
+      rightArmGroup.add(clone);
+    }
+  });
+
+  // 각 그룹의 피벗을 어깨 위치로 설정 (상단 중앙)
+  const lBox = new THREE.Box3().setFromObject(leftArmGroup);
+  const rBox = new THREE.Box3().setFromObject(rightArmGroup);
+  const lPivot = new THREE.Vector3(lBox.getCenter(new THREE.Vector3()).x, lBox.max.y, lBox.getCenter(new THREE.Vector3()).z);
+  const rPivot = new THREE.Vector3(rBox.getCenter(new THREE.Vector3()).x, rBox.max.y, rBox.getCenter(new THREE.Vector3()).z);
+
+  // 피벗 중심으로 오프셋
+  leftArmGroup.children.forEach(c => c.position.sub(lPivot));
+  rightArmGroup.children.forEach(c => c.position.sub(rPivot));
+
+  // 래퍼 그룹 (피벗 포인트가 어깨)
+  const leftWrapper = new THREE.Group();
+  leftWrapper.position.copy(lPivot);
+  leftWrapper.add(leftArmGroup);
+
+  const rightWrapper = new THREE.Group();
+  rightWrapper.position.copy(rPivot);
+  rightWrapper.add(rightArmGroup);
+
+  armsModel = new THREE.Group();
+  armsModel.add(leftWrapper);
+  armsModel.add(rightWrapper);
+
+  // 참조 저장 (애니메이션용 - wrapper를 회전)
+  leftArmGroup = leftWrapper;
+  rightArmGroup = rightWrapper;
+
+  armsModel.scale.set(0.045, 0.045, 0.045);
+  armsModel.position.set(0, -0.32, -0.45);
+  armsModel.rotation.set(0, Math.PI, 0);
+
+  camera.add(armsModel);
+
+  // GLB 내장 애니메이션이 있으면 설정
+  if(gltf.animations && gltf.animations.length > 0){
+    armsMixer = new THREE.AnimationMixer(armsModel);
+    gltf.animations.forEach(clip => {
+      armsActions[clip.name.toLowerCase()] = armsMixer.clipAction(clip);
+    });
+    if(armsActions['idle']) armsActions['idle'].play();
+  }
+}, undefined, (err) => {
+  console.warn('GLB 팔 모델 로드 실패, 기본 박스 팔 사용:', err);
+  const fallbackArm = (side) => {
+    const g = new THREE.Group();
+    const skin = new THREE.MeshStandardMaterial({color:0xf5c6a0,roughness:.6});
+    const sleeve = new THREE.MeshStandardMaterial({color:0x3366cc,roughness:.7});
+    const u = new THREE.Mesh(new THREE.BoxGeometry(.12,.35,.12), sleeve);
+    u.position.y = -.05; g.add(u);
+    const f = new THREE.Mesh(new THREE.BoxGeometry(.10,.30,.10), skin);
+    f.position.set(0,-.32,.04); g.add(f);
+    const h = new THREE.Mesh(new THREE.BoxGeometry(.12,.08,.14), skin);
+    h.position.set(0,-.50,.08); g.add(h);
+    g.position.set(side==='left'?-.35:.35, -.45, -.5);
+    g.rotation.x = .15;
+    return g;
+  };
+  leftArmGroup = fallbackArm('left');
+  rightArmGroup = fallbackArm('right');
+  armsModel = new THREE.Group();
+  armsModel.add(leftArmGroup);
+  armsModel.add(rightArmGroup);
+  camera.add(armsModel);
+});
 
 // Lighting
 scene.add(new THREE.AmbientLight(0x404060,.5));
@@ -581,6 +695,43 @@ function updatePlayer(dt){
   camera.rotation.order = 'YXZ';
   camera.rotation.y = yaw;
   camera.rotation.x = pitch;
+
+  // ── 팔 애니메이션 (걸을 때 앞뒤로 흔들기) ──
+  if(armsModel){
+    isMoving = (len > .01);
+    if(isMoving && player.onGround) armBobTimer += dt * 12;
+    else if(isMoving && !player.onGround) armBobTimer += dt * 3;
+    else {
+      // 서서히 0으로 복귀
+      const target = Math.round(armBobTimer / (Math.PI*2)) * Math.PI*2;
+      armBobTimer += (target - armBobTimer) * dt * 8;
+    }
+
+    const bobY = Math.sin(armBobTimer * 2) * .012;
+    const jumpLift = player.onGround ? 0 : Math.min(.1, Math.abs(player.vy) * .008);
+
+    armsModel.position.y = -0.32 + bobY - jumpLift;
+    armsModel.position.z = -0.45;
+
+    // 왼팔/오른팔 반대 방향 스윙 (걷기 애니메이션)
+    if(leftArmGroup && rightArmGroup){
+      const swingAmount = isMoving ? 0.35 : 0.02; // 걸을 때 크게, 멈추면 작게
+      const leftSwing = Math.sin(armBobTimer) * swingAmount;
+      const rightSwing = Math.sin(armBobTimer + Math.PI) * swingAmount; // 반대 위상
+
+      leftArmGroup.rotation.x = leftSwing;
+      rightArmGroup.rotation.x = rightSwing;
+
+      // 점프 시 팔 올리기
+      if(!player.onGround){
+        leftArmGroup.rotation.x = -0.3;
+        rightArmGroup.rotation.x = -0.3;
+      }
+    }
+
+    // AnimationMixer 업데이트
+    if(armsMixer) armsMixer.update(dt);
+  }
 
   // Point light follows player
   pLight.position.set(player.x, player.y+3, player.z);
